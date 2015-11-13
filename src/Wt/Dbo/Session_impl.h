@@ -9,8 +9,12 @@
 
 #include <iostream>
 
+#include <boost/type_traits.hpp>
+
 #include <Wt/Dbo/SqlConnection>
 #include <Wt/Dbo/Query>
+
+#include <Wt/Dbo/has_member.h>
 
 namespace Wt {
   namespace Dbo {
@@ -34,7 +38,137 @@ namespace Wt {
 	  return session->loadWithLongLongId<C>(statement, column);
 	}
       };
+
+    GENERATE_HAS_MEMBER(onPreInsert);
+    GENERATE_HAS_MEMBER(onPostInsert);
+    GENERATE_HAS_MEMBER(onPreUpdate);
+    GENERATE_HAS_MEMBER(onPostUpdate);
+    GENERATE_HAS_MEMBER(onPreDelete);
+    GENERATE_HAS_MEMBER(onPostDelete);
+    GENERATE_HAS_MEMBER(onInsertCommitted);
+    GENERATE_HAS_MEMBER(onUpdateCommitted);
+    GENERATE_HAS_MEMBER(onDeleteCommitted);
+
+    // On Pre Insert:
+    template<typename C>
+    typename boost::enable_if<has_member_onPreInsert<C>, void>::type
+    callOnPreInsert(C *dboRow, Session &session, const ptr<C> &dboPtr) {
+      dboRow->onPreInsert(session, dboPtr);
     }
+
+    template<typename C>
+    typename boost::disable_if<has_member_onPreInsert<C>, void>::type
+    callOnPreInsert(C *dboRow, Session &session, const ptr<C> &dboPtr) {
+      //Do nothing
+    }
+
+    // On Post Insert:
+    template<typename C>
+    typename boost::enable_if<has_member_onPostInsert<C>, void>::type
+    callOnPostInsert(C *dboRow, Session &session, const ptr<C> &dboPtr) {
+      dboRow->onPostInsert(session, dboPtr);
+    }
+
+    template<typename C>
+    typename boost::disable_if<has_member_onPostInsert<C>, void>::type
+    callOnPostInsert(C *dboRow, Session &session, const ptr<C> &dboPtr) {
+      //Do nothing
+    }
+
+    // On Pre Update:
+    template<typename C>
+    typename boost::enable_if<has_member_onPreUpdate<C>, void>::type
+    callOnPreUpdate(C *dboRow, Session &session, const ptr<C> &dboPtr) {
+      dboRow->onPreUpdate(session, dboPtr);
+    }
+
+    template<typename C>
+    typename boost::disable_if<has_member_onPreUpdate<C>, void>::type
+    callOnPreUpdate(C *dboRow, Session &session, const ptr<C> &dboPtr) {
+      //Do nothing
+    }
+
+    // On Post Update:
+    template<typename C>
+    typename boost::enable_if<has_member_onPostUpdate<C>, void>::type
+    callOnPostUpdate(C *dboRow, Session &session, const ptr<C> &dboPtr) {
+      dboRow->onPostUpdate(session, dboPtr);
+    }
+
+    template<typename C>
+    typename boost::disable_if<has_member_onPostUpdate<C>, void>::type
+    callOnPostUpdate(C *dboRow, Session &session, const ptr<C> &dboPtr) {
+      //Do nothing
+    }
+
+    // On Pre Delete:
+    template<typename C>
+    typename boost::enable_if<has_member_onPreDelete<C>, void>::type
+    callOnPreDelete(C *dboRow, Session &session, const ptr<C> &dboPtr) {
+      dboRow->onPreDelete(session, dboPtr);
+    }
+
+    template<typename C>
+    typename boost::disable_if<has_member_onPreDelete<C>, void>::type
+    callOnPreDelete(C *dboRow, Session &session, const ptr<C> &dboPtr) {
+      //Do nothing
+    }
+
+    // On Post Delete:
+    template<typename C>
+    typename boost::enable_if<has_member_onPostDelete<C>, void>::type
+    callOnPostDelete(C *dboRow, Session &session, const ptr<C> &dboPtr) {
+      dboRow->onPostDelete(session, dboPtr);
+    }
+
+    template<typename C>
+    typename boost::disable_if<has_member_onPostDelete<C>, void>::type
+    callOnPostDelete(C *dboRow, Session &session, const ptr<C> &dboPtr) {
+      //Do nothing
+    }
+
+    // On Insert Committed:
+    template<typename C>
+    typename boost::enable_if<has_member_onInsertCommitted<C>, void>::type
+    callOnInsertCommitted(C *dboRow, const ptr<C> &dboPtr) {
+      dboRow->onInsertCommitted(dboPtr);
+    }
+
+    template<typename C>
+    typename boost::disable_if<has_member_onInsertCommitted<C>, void>::type
+    callOnInsertCommitted(C *dboRow, const ptr<C> &dboPtr) {
+      //Do nothing
+    }
+
+    // On Update Committed:
+    template<typename C>
+    typename boost::enable_if<has_member_onUpdateCommitted<C>, void>::type
+    callOnUpdateCommitted(C *dboRow, const ptr<C> &dboPtr) {
+      dboRow->onUpdateCommitted(dboPtr);
+    }
+
+    template<typename C>
+    typename boost::disable_if<has_member_onUpdateCommitted<C>, void>::type
+    callOnUpdateCommitted(C *dboRow, const ptr<C> &dboPtr) {
+      //Do nothing
+    }
+
+    // On Delete Committed:
+    template<typename C>
+    typename boost::enable_if<has_member_onDeleteCommitted<C>, void>::type
+    callOnDeleteCommitted(C *dboRow, const ptr<C> &dboPtr) {
+      dboRow->onDeleteCommitted(dboPtr);
+    }
+
+    template<typename C>
+    typename boost::disable_if<has_member_onDeleteCommitted<C>, void>::type
+    callOnDeleteCommitted(C *dboRow, const ptr<C> &dboPtr) {
+      //Do nothing
+    }
+
+    }
+
+#undef GENERATE_HAS_MEMBER
 
 template <class C>
 void Session::mapClass(const char *tableName)
@@ -303,10 +437,25 @@ void Session::implSave(MetaDbo<C>& dbo)
 
   Session::Mapping<C> *mapping = getMapping<C>();
 
+  bool isInsert = dbo.isNew() && !dbo.savedInTransaction();
+  const ptr<C> dbRow(&dbo);
+  if (isInsert) {
+    Impl::callOnPreInsert(dbo.obj(), *this, dbRow);
+  } else {
+    Impl::callOnPreUpdate(dbo.obj(), *this, dbRow);
+  }
+
   SaveDbAction<C> action(dbo, *mapping);
   action.visit(*dbo.obj());
 
   mapping->registry_[dbo.id()] = &dbo;
+
+  if (isInsert) {
+    dbo.setInsertedInTransaction();
+    Impl::callOnPostInsert(dbo.obj(), *this, dbRow);
+  } else {
+    Impl::callOnPostUpdate(dbo.obj(), *this, dbRow);
+  }
 }
 
 template<class C>
@@ -318,6 +467,9 @@ void Session::implDelete(MetaDbo<C>& dbo)
   // when saved in transaction, we are already in this list
   if (!dbo.savedInTransaction())
     transaction_->objects_.push_back(new ptr<C>(&dbo));
+
+  const ptr<C> dbRow(&dbo);
+  Impl::callOnPreDelete(dbo.obj(), *this, dbRow);
 
   bool versioned = getMapping<C>()->versionFieldName && dbo.obj() != 0;
   SqlStatement *statement
@@ -345,6 +497,8 @@ void Session::implDelete(MetaDbo<C>& dbo)
       throw StaleObjectException(boost::lexical_cast<std::string>(dbo.id()),
 				 version);
   }
+
+  Impl::callOnPostDelete(dbo.obj(), *this, dbRow);
 }
 
 template<class C>
@@ -352,6 +506,20 @@ void Session::implTransactionDone(MetaDbo<C>& dbo, bool success)
 {
   TransactionDoneAction action(dbo, *this, *getMapping<C>(), success);
   action.visit(*dbo.obj());
+
+  ptr<C> dbRow(&dbo);
+  if(dbo.deletedInTransaction()) {
+    Impl::callOnDeleteCommitted(dbo.obj(), dbRow);
+
+  } else if(dbo.insertedInTransaction()) {
+    Impl::callOnInsertCommitted(dbo.obj(), dbRow);
+
+  } else if(dbo.savedInTransaction()) {
+    Impl::callOnUpdateCommitted(dbo.obj(), dbRow);
+
+  } else {
+    throw Exception("Session::implTransactionDone but it seems that there were not any actions with this object.");
+  }
 }
 
 template <class C>

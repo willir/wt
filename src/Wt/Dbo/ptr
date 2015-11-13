@@ -79,6 +79,7 @@ public:
 
     DeletedInTransaction = 0x100,
     SavedInTransaction = 0x200,
+    InsertedInTransaction = 0x400,
 
     TransactionState = (SavedInTransaction | DeletedInTransaction)
   };
@@ -123,6 +124,8 @@ public:
     { return 0 != (state_ & SavedInTransaction); }
   bool deletedInTransaction() const
     { return 0 != (state_ & DeletedInTransaction); }
+  bool insertedInTransaction() const
+    { return 0 != (state_ & InsertedInTransaction); }
 
   void setState(State state);
 
@@ -134,6 +137,8 @@ public:
 
   void incRef();
   void decRef();
+
+  void setInsertedInTransaction() { state_ |= InsertedInTransaction; }
 
 private:
   Session *session_;
