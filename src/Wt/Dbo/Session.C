@@ -17,6 +17,7 @@
 #include <vector>
 #include <string>
 #include <boost/lexical_cast.hpp>
+#include <boost/shared_ptr.hpp>
 
 namespace Wt {
   namespace Dbo {
@@ -1092,19 +1093,29 @@ void Session::needsFlush(MetaDboBase *obj)
   }
 }
 
-void Session::flush()
-{
+void Session::handleObjectsToAdd() {
   for (unsigned i=0; i < objectsToAdd_.size(); i++)
     needsFlush(objectsToAdd_[i]);
 
   objectsToAdd_.clear();
+}
+
+static void decrementDbo(MetaDboBase *dbo) {
+  dbo->decRef();
+}
+
+void Session::flush()
+{
+  handleObjectsToAdd();
 
   while (!dirtyObjects_.empty()) {
     MetaDboBaseSet::iterator i = dirtyObjects_.begin();
     MetaDboBase *dbo = *i;
-    dbo->flush();
     dirtyObjects_.erase(i);
-    dbo->decRef();
+    boost::shared_ptr<MetaDboBase> deleter(dbo, &decrementDbo);  // For case of exception
+    dbo->flush();
+
+    handleObjectsToAdd();
   }
 }
 

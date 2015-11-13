@@ -448,14 +448,14 @@ void Session::implSave(MetaDbo<C>& dbo)
   SaveDbAction<C> action(dbo, *mapping);
   action.visit(*dbo.obj());
 
-  mapping->registry_[dbo.id()] = &dbo;
-
   if (isInsert) {
     dbo.setInsertedInTransaction();
     Impl::callOnPostInsert(dbo.obj(), *this, dbRow);
   } else {
     Impl::callOnPostUpdate(dbo.obj(), *this, dbRow);
   }
+
+  mapping->registry_[dbo.id()] = &dbo;
 }
 
 template<class C>

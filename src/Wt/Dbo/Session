@@ -592,6 +592,7 @@ private:
 		       std::ostream *sout);
 
   void needsFlush(MetaDboBase *dbo);
+  void handleObjectsToAdd();
 
   template <class C> Mapping<C> *getMapping() const;
   Impl::MappingInfo *getMapping(const char *tableName) const;
