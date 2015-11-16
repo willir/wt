@@ -52,16 +52,43 @@ namespace Wt {
     // On Pre Insert:
     template<typename C>
     typename boost::enable_if<has_member_onPreInsert<C>, void>::type
-    callOnPreInsert(C *dboRow, Session &session, const ptr<C> &dboPtr) {
-      dboRow->onPreInsert(session, dboPtr);
+    callOnPreInsert(C *dboRow, const ptr<C> &dboPtr) {
+      dboRow->onPreInsert(dboPtr);
     }
 
     template<typename C>
     typename boost::disable_if<has_member_onPreInsert<C>, void>::type
-    callOnPreInsert(C *dboRow, Session &session, const ptr<C> &dboPtr) {
+    callOnPreInsert(C *dboRow, const ptr<C> &dboPtr) {
       //Do nothing
     }
 
+    // On Pre Update:
+    template<typename C>
+    typename boost::enable_if<has_member_onPreUpdate<C>, void>::type
+    callOnPreUpdate(C *dboRow, const ptr<C> &dboPtr) {
+        dboRow->onPreUpdate(dboPtr);
+    }
+
+    template<typename C>
+    typename boost::disable_if<has_member_onPreUpdate<C>, void>::type
+    callOnPreUpdate(C *dboRow, const ptr<C> &dboPtr) {
+        //Do nothing
+    }
+
+    // On Pre Delete:
+    template<typename C>
+    typename boost::enable_if<has_member_onPreDelete<C>, void>::type
+    callOnPreDelete(C *dboRow, const ptr<C> &dboPtr) {
+        dboRow->onPreDelete(dboPtr);
+    }
+
+    template<typename C>
+    typename boost::disable_if<has_member_onPreDelete<C>, void>::type
+    callOnPreDelete(C *dboRow, const ptr<C> &dboPtr) {
+        //Do nothing
+    }
+
+    //---------------------------------------
     // On Post Insert:
     template<typename C>
     typename boost::enable_if<has_member_onPostInsert<C>, void>::type
@@ -72,19 +99,6 @@ namespace Wt {
     template<typename C>
     typename boost::disable_if<has_member_onPostInsert<C>, void>::type
     callOnPostInsert(C *dboRow, Session &session, const ptr<C> &dboPtr) {
-      //Do nothing
-    }
-
-    // On Pre Update:
-    template<typename C>
-    typename boost::enable_if<has_member_onPreUpdate<C>, void>::type
-    callOnPreUpdate(C *dboRow, Session &session, const ptr<C> &dboPtr) {
-      dboRow->onPreUpdate(session, dboPtr);
-    }
-
-    template<typename C>
-    typename boost::disable_if<has_member_onPreUpdate<C>, void>::type
-    callOnPreUpdate(C *dboRow, Session &session, const ptr<C> &dboPtr) {
       //Do nothing
     }
 
@@ -101,19 +115,6 @@ namespace Wt {
       //Do nothing
     }
 
-    // On Pre Delete:
-    template<typename C>
-    typename boost::enable_if<has_member_onPreDelete<C>, void>::type
-    callOnPreDelete(C *dboRow, Session &session, const ptr<C> &dboPtr) {
-      dboRow->onPreDelete(session, dboPtr);
-    }
-
-    template<typename C>
-    typename boost::disable_if<has_member_onPreDelete<C>, void>::type
-    callOnPreDelete(C *dboRow, Session &session, const ptr<C> &dboPtr) {
-      //Do nothing
-    }
-
     // On Post Delete:
     template<typename C>
     typename boost::enable_if<has_member_onPostDelete<C>, void>::type
@@ -127,6 +128,7 @@ namespace Wt {
       //Do nothing
     }
 
+    //---------------------------------------
     // On Insert Committed:
     template<typename C>
     typename boost::enable_if<has_member_onInsertCommitted<C>, void>::type
@@ -440,9 +442,9 @@ void Session::implSave(MetaDbo<C>& dbo)
   bool isInsert = dbo.isNew() && !dbo.savedInTransaction();
   const ptr<C> dbRow(&dbo);
   if (isInsert) {
-    Impl::callOnPreInsert(dbo.obj(), *this, dbRow);
+    Impl::callOnPreInsert(dbo.obj(), dbRow);
   } else {
-    Impl::callOnPreUpdate(dbo.obj(), *this, dbRow);
+    Impl::callOnPreUpdate(dbo.obj(), dbRow);
   }
 
   SaveDbAction<C> action(dbo, *mapping);
@@ -469,7 +471,7 @@ void Session::implDelete(MetaDbo<C>& dbo)
     transaction_->objects_.push_back(new ptr<C>(&dbo));
 
   const ptr<C> dbRow(&dbo);
-  Impl::callOnPreDelete(dbo.obj(), *this, dbRow);
+  Impl::callOnPreDelete(dbo.obj(), dbRow);
 
   bool versioned = getMapping<C>()->versionFieldName && dbo.obj() != 0;
   SqlStatement *statement
