@@ -508,6 +508,7 @@ void Session::implTransactionDone(MetaDbo<C>& dbo, bool success)
 {
   TransactionDoneAction action(dbo, *this, *getMapping<C>(), success);
   action.visit(*dbo.obj());
+  if(!success) return;
 
   ptr<C> dbRow(&dbo);
   if(dbo.deletedInTransaction()) {
