@@ -129,7 +129,8 @@ Session::Session()
     connection_(0),
     connectionPool_(0),
     transaction_(0),
-    flushMode_(Auto)
+    flushMode_(Auto),
+    defaultTransactionSelectType_(Transaction::READ_ONLY)
 { }
 
 Session::~Session()
@@ -169,6 +170,14 @@ SqlConnection *Session::connection(bool openTransaction)
     transaction_->open();
 
   return transaction_->connection_;
+}
+
+Transaction::SelectType Session::transactionSelectType() const
+{
+  if (!transaction_)
+    throw Exception("Operation requires an active transaction");
+
+  return (transaction_->type_ != Transaction::DEFAULT) ? transaction_->type_ : defaultTransactionSelectType_;
 }
 
 SqlConnection *Session::useConnection()
@@ -1204,6 +1213,14 @@ void Session::getFields(const char *tableName,
 			       FieldInfo::Version | FieldInfo::NeedsQuotes));
 
   result.insert(result.end(), mapping->fields.begin(), mapping->fields.end());
+}
+
+void Session::setDefaultTransactionSelectType(Transaction::SelectType selectType)
+{
+  if (selectType == Transaction::DEFAULT) {
+    throw Exception("Default select type can't be default");
+  }
+  defaultTransactionSelectType_ = selectType;
 }
 
 MetaDboBase *Session::createDbo(Impl::MappingInfo *mapping)

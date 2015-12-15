@@ -468,7 +468,6 @@ public:
   virtual std::string sql() const {
     return sql_;
   }
-
 private:
   Sqlite3& db_;
   sqlite3_stmt *st_;
@@ -638,6 +637,11 @@ const char *Sqlite3::blobType() const
 bool Sqlite3::supportDeferrableFKConstraint() const
 {
   return true;
+}
+
+//! SQLite doesn't support 'FOR UPDATE' Clause
+std::string Sqlite3::forUpdateClause(bool noWait) const {
+  return "";
 }
 
 void Sqlite3::setDateTimeStorage(SqlDateTimeType type,

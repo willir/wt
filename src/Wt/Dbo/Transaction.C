@@ -14,14 +14,16 @@
 namespace Wt {
   namespace Dbo {
 
-Transaction::Transaction(Session& session)
+Transaction::Transaction(Session& session, SelectType type)
   : committed_(false),
     session_(session)
 { 
   if (!session_.transaction_)
-    session_.transaction_ = new Impl(session_);
+    session_.transaction_ = new Impl(session_, type);
 
   impl_ = session_.transaction_;
+  if (impl_->type_ < type)
+    impl_->type_ = type;
 
   ++impl_->transactionCount_;
 }
@@ -112,8 +114,9 @@ SqlConnection *Transaction::connection() const
   return impl_->connection_;
 }
 
-Transaction::Impl::Impl(Session& session)
+Transaction::Impl::Impl(Session& session, Transaction::SelectType type)
   : session_(session),
+    type_(type),
     active_(true),
     needsRollback_(false),
     open_(false),

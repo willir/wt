@@ -9,6 +9,8 @@
 
 #include <vector>
 
+#include <boost/logic/tribool.hpp>
+
 #include <Wt/Dbo/SqlTraits>
 #include <Wt/Dbo/ptr>
 
@@ -36,7 +38,7 @@ namespace Wt {
         std::pair<SqlStatement *, SqlStatement *>
         statements(const std::string &where, const std::string &groupBy,
                    const std::string &having, const std::string &orderBy,
-                   int limit, int offset) const;
+                   int limit, int offset, const std::string &forUpdate) const;
         Session &session() const;
 
         QueryBase();
@@ -379,6 +381,8 @@ public:
   int offset() const;
   Query<Result, DynamicBinding>& limit(int count);
   int limit() const;
+  Query<Result, DynamicBinding>& forUpdate(bool noWait=false);  //!< Add FOR UPDATE statement.
+  Query<Result, DynamicBinding>& notForUpdate();  //!< Remove FOR UPDATE statement.
   Result resultValue() const;
   collection< Result > resultList() const;
   operator Result () const;
@@ -390,6 +394,9 @@ private:
 
   std::string where_, groupBy_, having_, orderBy_;
   int limit_, offset_;
+
+  boost::tribool forUpdate_;
+  bool forUpdateNoWait_;
 
   std::vector<Impl::ParameterBase *> parameters_;
 

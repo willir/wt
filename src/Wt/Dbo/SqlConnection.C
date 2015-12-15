@@ -145,5 +145,10 @@ bool SqlConnection::requireSubqueryAlias() const
 void SqlConnection::prepareForDropTables()
 { }
 
+std::string SqlConnection::forUpdateClause(bool noWait) const
+{
+  return (!noWait) ? "FOR UPDATE" : "FOR UPDATE NOWAIT";
+}
+
   }
 }

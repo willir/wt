@@ -267,6 +267,13 @@ public:
    * Default: ALTER TABLE .. DROP CONSTRAINT ..
    */
   virtual const char *alterTableConstraintString() const;
+
+  /*! \brief Returns the 'FOR UPDATE' SQL clause.
+   *
+   * This is used by Query class to create select sql.
+   * This method can return empty string if DB doesn't support 'FOR UPDATE' clause
+   */
+  virtual std::string forUpdateClause(bool noWait) const;
   //@}
 
   bool showQueries() const;

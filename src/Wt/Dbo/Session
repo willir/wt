@@ -474,6 +474,8 @@ public:
    */
   void setFlushMode(FlushMode mode) { flush(); flushMode_ = mode; }
 
+  void setDefaultTransactionSelectType(Transaction::SelectType selectType);
+
 private:
 
   mutable std::string longlongType_;
@@ -548,6 +550,7 @@ private:
   SqlConnectionPool *connectionPool_;
   Transaction::Impl *transaction_;
   FlushMode flushMode_;
+  Transaction::SelectType defaultTransactionSelectType_;
 
   void initSchema() const;
   void resolveJoinIds(Impl::MappingInfo *mapping);
@@ -632,6 +635,11 @@ private:
   SqlConnection *useConnection();
   void returnConnection(SqlConnection *connection);
   SqlConnection *connection(bool openTransaction);
+
+  /*! Returns either Transaction::READ_ONLY or Transaction::FOR_UPDATE.
+   * Transaction::FOR_UPDATE means that 'FOR UPDATE' clause will be added in SELECT statement.
+   */
+  Transaction::SelectType transactionSelectType() const;
 
   MetaDboBase *createDbo(Impl::MappingInfo *mapping);
 

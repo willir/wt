@@ -112,6 +112,7 @@ std::string completeQuerySelectSql(const std::string& sql,
 				   const std::string& having,
 				   const std::string& orderBy,
 				   int limit, int offset,
+				   const std::string& forUpdate,
 				   const std::vector<FieldInfo>& fields,
 				   LimitQuery limitQueryMethod)
 {
@@ -129,7 +130,7 @@ std::string completeQuerySelectSql(const std::string& sql,
   if (!orderBy.empty())
     result += " order by " + orderBy;
 
-  return addLimitQuery(result, limit, offset, limitQueryMethod);
+  return addLimitQuery(result, limit, offset, limitQueryMethod) + forUpdate;
 }
 
 std::string createQuerySelectSql(const std::string& from,
@@ -138,6 +139,7 @@ std::string createQuerySelectSql(const std::string& from,
 				 const std::string& having,
 				 const std::string& orderBy,
 				 int limit, int offset,
+				 const std::string& forUpdate,
 				 const std::vector<FieldInfo>& fields,
 				 LimitQuery limitQueryMethod)
 {
@@ -155,7 +157,7 @@ std::string createQuerySelectSql(const std::string& from,
   if (!orderBy.empty())
     result += " order by " + orderBy;
 
-  return addLimitQuery(result, limit, offset, limitQueryMethod);
+  return addLimitQuery(result, limit, offset, limitQueryMethod) + forUpdate;
 }
 
 std::string createWrappedQueryCountSql(const std::string& query,

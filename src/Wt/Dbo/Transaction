@@ -69,6 +69,10 @@ class ptr_base;
 class WTDBO_API Transaction
 {
 public:
+  enum SelectType {
+    DEFAULT, READ_ONLY, FOR_UPDATE
+  };
+
   /*! \brief Constructor.
    *
    * Opens a transaction for the given \p session. If a transaction is
@@ -76,7 +80,7 @@ public:
    * transactions must commit successfully for the entire transaction to
    * succeed.
    */
-  explicit Transaction(Session& session);
+  explicit Transaction(Session& session, SelectType type=DEFAULT);
 
   /*! \brief Destructor.
    *
@@ -128,6 +132,8 @@ public:
 private:
   struct Impl {
     Session& session_;
+    SelectType type_;
+
     bool active_;
     bool needsRollback_;
     bool open_;
@@ -141,7 +147,7 @@ private:
     void commit();
     void rollback();
 
-    Impl(Session& session_);
+    Impl(Session& session_, SelectType type);
     ~Impl();
   private:
     void removeAllDirtyObjects();
