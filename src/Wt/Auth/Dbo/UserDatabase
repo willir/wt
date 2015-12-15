@@ -32,6 +32,7 @@ namespace Wt {
 template <class DboType>
 class UserDatabase : public AbstractUserDatabase
 {
+protected:
   typedef typename DboType::AuthTokenType AuthTokenType;
   typedef Wt::Dbo::collection< Wt::Dbo::ptr<AuthTokenType> > AuthTokens;
 
@@ -392,7 +393,7 @@ public:
     maxAuthTokensPerUser_ = maxAuthTokensPerUser;
   }
 
-private:
+protected:
   Wt::Dbo::Session& session_;
   User::Status newUserStatus_;
   mutable Wt::Dbo::ptr<DboType> user_;
