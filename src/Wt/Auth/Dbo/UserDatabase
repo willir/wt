@@ -350,7 +350,8 @@ public:
 	     "join " + session_.tableNameQuoted<AuthTokenType>() + " t "
 	     "on u.id = t.\"" + session_.tableName<DboType>() + "_id\"")
 	    .where("t.\"value\" = ?").bind(hash)
-	    .where("t.\"expires\" > ?").bind(WDateTime::currentDateTime()));
+	    .where("t.\"expires\" > ?").bind(WDateTime::currentDateTime())
+        .notForUpdate());
     t.commit();
 
     if (user_)
