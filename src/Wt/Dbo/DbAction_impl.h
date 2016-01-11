@@ -283,7 +283,18 @@ void LoadDbAction<C>::visit(C& obj)
   Session *session = dbo_.session();
 
   if (!continueStatement) {
-    use(statement_ = session->template getStatement<C>(Session::SqlSelectById));
+
+    bool forUpdate;
+    if(dbo_.forUpdate()) {
+      forUpdate = true;
+    } else if(!dbo_.forUpdate()) {
+      forUpdate = false;
+    } else {  // indeterminate (wasn't set explicitly)
+      forUpdate = session->transactionSelectType() == Transaction::FOR_UPDATE;
+    }
+
+    const int id = (forUpdate) ? Session::SqlSelectByIdForUpdate : Session::SqlSelectById;
+    use(statement_ = session->template getStatement<C>(id));
     statement_->reset();
 
     int column = 0;

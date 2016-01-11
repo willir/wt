@@ -10,6 +10,7 @@
 #include <string>
 #include <Wt/Dbo/SqlTraits>
 
+#include <boost/logic/tribool.hpp>
 #include <boost/utility/enable_if.hpp>
 #include <boost/type_traits/is_base_of.hpp>
 #include <boost/type_traits/remove_const.hpp>
@@ -85,7 +86,7 @@ public:
   };
 
   MetaDboBase(int version, int state, Session *session)
-    : session_(session), version_(version), state_(state), refCount_(0)
+    : session_(session), version_(version), forUpdate_(boost::indeterminate), state_(state), refCount_(0)
   { }
 
   virtual ~MetaDboBase();
@@ -140,9 +141,13 @@ public:
 
   void setInsertedInTransaction() { state_ |= InsertedInTransaction; }
 
+  void forUpdate(boost::tribool val) { forUpdate_ = val; }
+  boost::tribool forUpdate() const { return forUpdate_; }
+
 private:
   Session *session_;
   int version_;
+  boost::tribool forUpdate_;
 
 protected:
   int state_;
@@ -826,6 +831,9 @@ public:
    * This may return 0 if the pointer is null or not added to a session.
    */
   Session *session() const;
+
+  void forUpdate(boost::tribool val) { obj_->forUpdate(val); }
+  boost::tribool forUpdate() const { return obj_->forUpdate(); }
 
 protected:
   MetaDbo<MutC> *obj() const { return obj_; }

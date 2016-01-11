@@ -211,7 +211,7 @@ public:
    * \sa ptr::id(), loadLazy()
    */
   template <class C> ptr<C> load(const typename dbo_traits<C>::IdType& id,
-				 bool forceReread = false);
+				 bool forceReread = false, boost::tribool forUpdate=boost::indeterminate);
 
   /*! \brief Lazy loads a persisted object.
    *
@@ -476,6 +476,11 @@ public:
 
   void setDefaultTransactionSelectType(Transaction::SelectType selectType);
 
+  /*! Returns either Transaction::READ_ONLY or Transaction::FOR_UPDATE.
+   * Transaction::FOR_UPDATE means that 'FOR UPDATE' clause will be added in SELECT statement.
+   */
+  Transaction::SelectType transactionSelectType() const;
+
 private:
 
   mutable std::string longlongType_;
@@ -497,7 +502,8 @@ private:
 	 SqlDelete = 2,
 	 SqlDeleteVersioned = 3,
 	 SqlSelectById = 4,
-	 FirstSqlSelectSet = 5 };
+	 SqlSelectByIdForUpdate = 5,
+	 FirstSqlSelectSet = 6 };
 
   struct JoinId {
     std::string joinIdName;
@@ -635,11 +641,6 @@ private:
   SqlConnection *useConnection();
   void returnConnection(SqlConnection *connection);
   SqlConnection *connection(bool openTransaction);
-
-  /*! Returns either Transaction::READ_ONLY or Transaction::FOR_UPDATE.
-   * Transaction::FOR_UPDATE means that 'FOR UPDATE' clause will be added in SELECT statement.
-   */
-  Transaction::SelectType transactionSelectType() const;
 
   MetaDboBase *createDbo(Impl::MappingInfo *mapping);
 

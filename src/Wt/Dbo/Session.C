@@ -402,6 +402,9 @@ void Session::prepareStatements(Impl::MappingInfo *mapping)
 
   mapping->statements.push_back(sql.str()); // SelectById
 
+  sql << " for update";
+  mapping->statements.push_back(sql.str()); // SelectByIdForUpdate
+
   /*
    * Collections SQL
    */
