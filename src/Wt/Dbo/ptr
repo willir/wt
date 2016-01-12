@@ -141,8 +141,8 @@ public:
 
   void setInsertedInTransaction() { state_ |= InsertedInTransaction; }
 
-  void forUpdate(boost::tribool val) { forUpdate_ = val; }
-  boost::tribool forUpdate() const { return forUpdate_; }
+  void forUpdate(boost::tribool val=true) { forUpdate_ = val; }
+  boost::tribool isForUpdate() const { return forUpdate_; }
 
 private:
   Session *session_;
@@ -832,8 +832,8 @@ public:
    */
   Session *session() const;
 
-  void forUpdate(boost::tribool val) { obj_->forUpdate(val); }
-  boost::tribool forUpdate() const { return obj_->forUpdate(); }
+  void forUpdate(boost::tribool val=true) { obj_->forUpdate(val); }
+  boost::tribool isForUpdate() const { return obj_->forUpdate(); }
 
 protected:
   MetaDbo<MutC> *obj() const { return obj_; }

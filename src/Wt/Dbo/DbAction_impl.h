@@ -285,9 +285,9 @@ void LoadDbAction<C>::visit(C& obj)
   if (!continueStatement) {
 
     bool forUpdate;
-    if(dbo_.forUpdate()) {
+    if(dbo_.isForUpdate()) {
       forUpdate = true;
-    } else if(!dbo_.forUpdate()) {
+    } else if(!dbo_.isForUpdate()) {
       forUpdate = false;
     } else {  // indeterminate (wasn't set explicitly)
       forUpdate = session->transactionSelectType() == Transaction::FOR_UPDATE;
