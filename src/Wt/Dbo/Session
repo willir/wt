@@ -623,6 +623,8 @@ private:
   template<class C> void implLoad(MetaDbo<C>& dbo, SqlStatement *statement,
 				  int& column);
 
+  template<class C> void callOnDeleteCommitted(MetaDbo<C>& dbo);
+
   static std::string statementId(const char *table, int statementIdx);
 
   template <class C> SqlStatement *getStatement(int statementIdx);

@@ -138,6 +138,7 @@ void MetaDbo<C>::doTransactionDone(bool success)
 
   if (success) {
     if (deletedInTransaction()) {
+      s->callOnDeleteCommitted(*this);  // It has te be done before prune, or id will be set to -1
       prune();
       setSession(0);
     } else if (savedInTransaction()) {

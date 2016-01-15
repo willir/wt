@@ -513,7 +513,7 @@ void Session::implTransactionDone(MetaDbo<C>& dbo, bool success)
 
   ptr<C> dbRow(&dbo);
   if(dbo.deletedInTransaction()) {
-    Impl::callOnDeleteCommitted(dbo.obj(), dbRow);
+    // It does before, in MetaDbo<C>::doTransactionDone
 
   } else if(dbo.insertedInTransaction()) {
     Impl::callOnInsertCommitted(dbo.obj(), dbRow);
@@ -542,6 +542,13 @@ void Session::implLoad(MetaDbo<C>& dbo, SqlStatement *statement, int& column)
     delete obj;
     throw;
   }
+}
+
+template<class C>
+void Session::callOnDeleteCommitted(MetaDbo<C>& dbo)
+{
+  ptr<C> dbRow(&dbo);
+  Impl::callOnDeleteCommitted(dbo.obj(), dbRow);
 }
 
 template <class C>
