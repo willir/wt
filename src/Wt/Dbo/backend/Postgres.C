@@ -44,6 +44,21 @@ public:
   { }
 };
 
+static void handleErr(int err, PGresult *result, PGconn *conn)
+{
+  if (err != PGRES_COMMAND_OK && err != PGRES_TUPLES_OK) {
+    std::string code;
+
+    if (result) {
+      char *v = PQresultErrorField(result, PG_DIAG_SQLSTATE);
+      if (v)
+        code = v;
+    }
+
+    throw PostgresException(PQerrorMessage(conn), code);
+  }
+}
+
 class PostgresStatement : public SqlStatement
 {
 public:
@@ -208,7 +223,7 @@ public:
 
       result_ = PQprepare(conn_.connection(), name_, sql_.c_str(),
 			  paramTypes_ ? params_.size() : 0, (Oid *)paramTypes_);
-      handleErr(PQresultStatus(result_), result_);
+      handleErr(PQresultStatus(result_), result_, conn_.connection());
     }
 
     for (unsigned i = 0; i < params_.size(); ++i) {
@@ -258,7 +273,7 @@ public:
       }
     }
 
-    handleErr(PQresultStatus(result_), result_);
+    handleErr(PQresultStatus(result_), result_, conn_.connection());
   }
 
   virtual long long insertedId()
@@ -476,21 +491,6 @@ private:
  
   int lastId_, row_, affectedRows_;
 
-  void handleErr(int err, PGresult *result)
-  {
-    if (err != PGRES_COMMAND_OK && err != PGRES_TUPLES_OK) {
-      std::string code;
-
-      if (result) {
-	char *v = PQresultErrorField(result, PG_DIAG_SQLSTATE);
-	if (v)
-	  code = v;
-      }
-
-      throw PostgresException(PQerrorMessage(conn_.connection()), code);
-    }
-  }
-
   void setValue(int column, const std::string& value) {
     if (column >= paramCount_)
       throw PostgresException("Binding too much parameters");
@@ -604,14 +604,11 @@ void Postgres::executeSql(const std::string &sql)
 
   if (showQueries())
     std::cerr << sql << std::endl;
-			
+
   result = PQexec(conn_, sql.c_str());
   err = PQresultStatus(result);
-  if (err != PGRES_COMMAND_OK && err != PGRES_TUPLES_OK) {
-    PQclear(result);
-    throw PostgresException(PQerrorMessage(conn_));
-  }
   PQclear(result);
+  handleErr(err, result, connection());
 }
 
 std::string Postgres::autoincrementType() const
@@ -688,7 +685,9 @@ void Postgres::startTransaction()
 void Postgres::commitTransaction()
 {
   PGresult *result = PQexec(conn_, "commit transaction");
+  int err = PQresultStatus(result);
   PQclear(result);
+  handleErr(err, result, connection());
 }
 
 void Postgres::rollbackTransaction()
