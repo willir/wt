@@ -216,6 +216,7 @@ void substituteFields(const SelectFieldList& list,
 		      int offset)
 {
   for (unsigned i = 0, j = 0; j < list.size(); ++j) {
+    if (i >= fs.size()) break;
     if (fs[i].isFirstDboField()) {
       std::string dboFields;
 

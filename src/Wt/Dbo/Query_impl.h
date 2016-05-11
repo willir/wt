@@ -8,6 +8,7 @@
 #define WT_DBO_QUERY_IMPL_H_
 
 #include <boost/tuple/tuple.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include <Wt/Dbo/Exception>
 #include <Wt/Dbo/Field>
@@ -204,8 +205,15 @@ void QueryBase<Result>::fieldsForSelect(const SelectFieldList& list,
   }
 
   query_result_traits<Result>::getFields(*session_, &aliases, result);
-  if (!aliases.empty())
-    throw Exception("Session::query(): too many aliases for result");
+  // TODO: check that all aliases has keyword 'AS'.
+
+  for (size_t i=0; i<aliases.size(); ++i) {
+    boost::to_upper(aliases[i]);
+    if (aliases[i].find(" AS ") == std::string::npos) {
+      throw Exception("Session::query(): too many aliases for result. If one need to add Extra argument, "
+                              "it has to have 'AS' keyword");
+    }
+  }
 }
 
 template <class Result>
