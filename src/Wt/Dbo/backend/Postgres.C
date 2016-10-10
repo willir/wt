@@ -32,18 +32,6 @@ namespace Wt {
   namespace Dbo {
     namespace backend {
 
-class PostgresException : public Exception
-{
-public:
-  PostgresException(const std::string& msg)
-    : Exception(msg)
-  { }
-
-  PostgresException(const std::string& msg, const std::string& code)
-    : Exception(msg, code)
-  { }
-};
-
 static void handleErr(int err, PGresult *result, PGconn *conn)
 {
   if (err != PGRES_COMMAND_OK && err != PGRES_TUPLES_OK) {
@@ -55,7 +43,11 @@ static void handleErr(int err, PGresult *result, PGconn *conn)
         code = v;
     }
 
-    throw PostgresException(PQerrorMessage(conn), code);
+    if (code == "40P01") {
+        throw DeadLockException(PQerrorMessage(conn), code);
+    } else {
+        throw NonRetriableException(PQerrorMessage(conn), code);
+    }
   }
 }
 
@@ -305,8 +297,7 @@ public:
       }
       break;
     case Done:
-      throw PostgresException("Postgres: nextRow(): statement already "
-			      "finished");
+      throw NonRetriableException("Postgres: nextRow(): statement already finished");
     }
 
     return false;
@@ -493,7 +484,7 @@ private:
 
   void setValue(int column, const std::string& value) {
     if (column >= paramCount_)
-      throw PostgresException("Binding too much parameters");
+      throw NonRetriableException("Binding too much parameters");
 
     for (int i = (int)params_.size(); i <= column; ++i)
       params_.push_back(Param());
@@ -584,7 +575,7 @@ bool Postgres::connect(const std::string& db)
     std::string error = PQerrorMessage(conn_);
     PQfinish(conn_);
     conn_ = 0;
-    throw PostgresException("Could not connect to: " + error);
+    throw NonRetriableException("Could not connect to: " + error);
   }
 
   PQsetClientEncoding(conn_, "UTF8");
@@ -653,7 +644,7 @@ const char *Postgres::dateTimeType(SqlDateTimeType type) const
 
   std::stringstream ss;
   ss << __FILE__ << ":" << __LINE__ << ": implementation error";
-  throw PostgresException(ss.str());
+  throw NonRetriableException(ss.str());
 }
 
 const char *Postgres::blobType() const

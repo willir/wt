@@ -189,7 +189,6 @@ void Transaction::Impl::rollback()
 }
 
 void Transaction::Impl::removeAllDirtyObjects() {
-  std::cerr << "Transaction::Impl::removeAllDirtyObjects(): " << std::endl;
   session_.objectsToAdd_.clear();
 
   while (!session_.dirtyObjects_.empty()) {

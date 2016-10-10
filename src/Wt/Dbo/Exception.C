@@ -18,17 +18,30 @@ Exception::Exception(const std::string& error, const std::string& code)
 
 Exception::~Exception() throw() { }
 
+RetriableException::RetriableException(const std::string& error, const std::string& code)
+  : Exception(error, code)
+{ }
+
+NonRetriableException::NonRetriableException(const std::string& error, const std::string& code)
+  : Exception(error, code)
+{ }
+
+DeadLockException::DeadLockException(const std::string& error, const std::string& code)
+  : RetriableException("DeadLock: " + error, code)
+{ }
+
 StaleObjectException::StaleObjectException(const std::string& id, int version)
-  : Exception("Stale object, id = " + id + ", version = "
+  : RetriableException("Stale object, id = " + id + ", version = "
 	      + boost::lexical_cast<std::string>(version))
 { }
 
 ObjectNotFoundException::ObjectNotFoundException(const std::string& id)
-  : Exception("Object not found, id = " + id)
+  : NonRetriableException("Object not found, id = " + id)
 { }
 
 NoUniqueResultException::NoUniqueResultException()
-  : Exception("Query: resultValue(): more than one result")
+  : NonRetriableException("Query: resultValue(): more than one result")
 { }
+
   }
 }
