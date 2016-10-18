@@ -16,10 +16,12 @@ namespace Wt {
   namespace Dbo {
 
 SqlConnection::SqlConnection()
+  : transactionIsolationLevel_(READ_COMMITTED)
 { }
 
 SqlConnection::SqlConnection(const SqlConnection& other)
-  : properties_(other.properties_)
+  : transactionIsolationLevel_(READ_COMMITTED),
+    properties_(other.properties_)
 { }
 
 SqlConnection::~SqlConnection()
@@ -111,6 +113,10 @@ const char *SqlConnection::alterTableConstraintString() const
 bool SqlConnection::showQueries() const
 {
   return property("show-queries") == "true";
+}
+
+void SqlConnection::setTransactionIsolationLevel(TransactionIsolationLevel transactionIsolationLevel) {
+  transactionIsolationLevel_ = transactionIsolationLevel;
 }
 
 std::string SqlConnection::textType(int size) const

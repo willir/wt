@@ -35,6 +35,17 @@ enum LimitQuery{
       NotSupported
 };
 
+/*! \brief Enum that defines a limit query type.
+ *
+ * Oracle is using Rownum and Firebeard is using RowsFromTo instead of limit and
+ * offset in sql
+ */
+enum TransactionIsolationLevel{
+      READ_COMMITTED,
+      REPEATABLE_READ,
+      SERIALIZABLE
+};
+
 class SqlStatement;
 
 /*! \class SqlConnection Wt/Dbo/SqlConnection Wt/Dbo/SqlConnection
@@ -278,10 +289,14 @@ public:
 
   bool showQueries() const;
 
+  void setTransactionIsolationLevel(TransactionIsolationLevel transactionIsolationLevel);
+
 protected:
   SqlConnection();
   SqlConnection(const SqlConnection& other);
   void clearStatementCache();
+
+  TransactionIsolationLevel transactionIsolationLevel_;
 
 private:
   typedef std::map<std::string, SqlStatement *> StatementMap;

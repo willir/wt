@@ -44,9 +44,13 @@ static void handleErr(int err, PGresult *result, PGconn *conn)
     }
 
     if (code == "40P01") {
-        throw DeadLockException(PQerrorMessage(conn), code);
+      throw DeadLockException(PQerrorMessage(conn), code);
+
+    } else if (code == "40001") {
+      throw SerializationFailureException(PQerrorMessage(conn), code);
+
     } else {
-        throw NonRetriableException(PQerrorMessage(conn), code);
+      throw NonRetriableException(PQerrorMessage(conn), code);
     }
   }
 }
@@ -669,7 +673,19 @@ bool Postgres::requireSubqueryAlias() const
 
 void Postgres::startTransaction()
 {
-  PGresult *result = PQexec(conn_, "start transaction");
+  PGresult *result = NULL;
+  switch (transactionIsolationLevel_) {
+  case READ_COMMITTED:
+    result = PQexec(conn_, "start transaction");
+    break;
+  case REPEATABLE_READ:
+    result = PQexec(conn_, "start transaction isolation level repeatable read");
+    break;
+  case SERIALIZABLE:
+    result = PQexec(conn_, "start transaction isolation level serializable");
+    break;
+  }
+  assert(result != NULL);
   PQclear(result);
 }
 

@@ -12,7 +12,7 @@ namespace Wt {
   namespace Dbo {
 
 Exception::Exception(const std::string& error, const std::string& code)
-  : std::runtime_error(error),
+  : std::runtime_error("Code:" + code + ". " + error),
     code_(code)
 { }
 
@@ -28,6 +28,10 @@ NonRetriableException::NonRetriableException(const std::string& error, const std
 
 DeadLockException::DeadLockException(const std::string& error, const std::string& code)
   : RetriableException("DeadLock: " + error, code)
+{ }
+
+SerializationFailureException::SerializationFailureException(const std::string& error, const std::string& code)
+  : RetriableException("SerializationFailure: " + error, code)
 { }
 
 StaleObjectException::StaleObjectException(const std::string& id, int version)

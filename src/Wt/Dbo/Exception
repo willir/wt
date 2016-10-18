@@ -91,6 +91,14 @@ public:
   DeadLockException(const std::string& error, const std::string& code);
 };
 
+class WTDBO_API SerializationFailureException : public RetriableException
+{
+public:
+  /*! \brief Constructor.
+   */
+  SerializationFailureException(const std::string& error, const std::string& code);
+};
+
 /*! \class ObjectNotFoundException Wt/Dbo/Exception Wt/Dbo/Exception
  *  \brief %Exception thrown when trying to load a non-existing object.
  *
