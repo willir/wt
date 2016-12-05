@@ -579,7 +579,7 @@ bool Postgres::connect(const std::string& db)
     std::string error = PQerrorMessage(conn_);
     PQfinish(conn_);
     conn_ = 0;
-    throw NonRetriableException("Could not connect to: " + error);
+    throw ConnectionDbFailureException(error);
   }
 
   PQsetClientEncoding(conn_, "UTF8");

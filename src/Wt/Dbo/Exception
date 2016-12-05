@@ -99,6 +99,19 @@ public:
   SerializationFailureException(const std::string& error, const std::string& code);
 };
 
+/*! \class ConnectionDbFailureException
+ *  \brief %Exception thrown when connection to db failure is happened.
+ *
+ * \ingroup dbo
+ */
+class WTDBO_API ConnectionDbFailureException : public NonRetriableException
+{
+public:
+  /*! \brief Constructor.
+   */
+  ConnectionDbFailureException(const std::string& error);
+};
+
 /*! \class ObjectNotFoundException Wt/Dbo/Exception Wt/Dbo/Exception
  *  \brief %Exception thrown when trying to load a non-existing object.
  *

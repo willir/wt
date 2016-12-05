@@ -39,6 +39,10 @@ StaleObjectException::StaleObjectException(const std::string& id, int version)
 	      + boost::lexical_cast<std::string>(version))
 { }
 
+ConnectionDbFailureException::ConnectionDbFailureException(const std::string& error)
+  : NonRetriableException(error)
+{ }
+
 ObjectNotFoundException::ObjectNotFoundException(const std::string& id)
   : NonRetriableException("Object not found, id = " + id)
 { }
