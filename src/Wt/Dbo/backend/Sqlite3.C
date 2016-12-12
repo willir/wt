@@ -215,8 +215,7 @@ public:
 
   virtual void execute()
   {
-    if (db_.showQueries())
-      std::cerr << sql_ << std::endl;
+    db_.showQueries(sql_);
 
     int result = sqlite3_step(st_);
 
