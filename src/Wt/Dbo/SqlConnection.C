@@ -81,18 +81,22 @@ std::string SqlConnection::property(const std::string& name) const
     return std::string();
 }
 
+static void logQueryToCerr(const std::string& queryAsStr) {
+  std::cerr << queryAsStr << std::endl;
+};
+
 void SqlConnection::setProperty(const std::string& name,
 				const std::string& value)
 {
+
+
   properties_[name] = value;
   if (name == "show-queries") {
     std::cerr << "setProperty(\"show-queries\") is deprecated. One should use setShowQueriesHandler instead" << std::endl;
     if (value == "true") {
-      setShowQueriesHandler([](const std::string& queryAsStr) {
-        std::cerr << queryAsStr << std::endl;
-      });
+      setShowQueriesHandler(&logQueryToCerr);
     } else {
-      setShowQueriesHandler(nullptr);
+      setShowQueriesHandler(NULL);
     }
   }
 }
@@ -122,9 +126,9 @@ const char *SqlConnection::alterTableConstraintString() const
   return "constraint";
 }
 
-void SqlConnection::setShowQueriesHandler(std::function<void(const std::string &)> &&handler)
+void SqlConnection::setShowQueriesHandler(const boost::function1<void, const std::string&> &handler)
 {
-  queryLogger_ = std::move(handler);
+  queryLogger_ = handler;
 }
 
 void SqlConnection::showQueries(const std::string &queryAsStr) const

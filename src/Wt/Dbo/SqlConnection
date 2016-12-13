@@ -7,10 +7,12 @@
 #ifndef WT_DBO_SQL_CONNECTION_H_
 #define WT_DBO_SQL_CONNECTION_H_
 
-#include <functional>
 #include <map>
 #include <string>
 #include <vector>
+
+#include <boost/function.hpp>
+
 #include <Wt/Dbo/WDboDllDefs.h>
 
 namespace Wt {
@@ -288,7 +290,7 @@ public:
   virtual std::string forUpdateClause(bool noWait) const;
   //@}
 
-  void setShowQueriesHandler(std::function<void(const std::string&)> &&handler);
+  void setShowQueriesHandler(const boost::function1<void, const std::string&> &handler);
   void showQueries(const std::string& sqlAsQuery) const;
 
   void setTransactionIsolationLevel(TransactionIsolationLevel transactionIsolationLevel);
@@ -306,7 +308,7 @@ private:
   StatementMap statementCache_;
   std::map<std::string, std::string> properties_;
 
-  std::function<void(const std::string&)> queryLogger_;
+  boost::function1<void, const std::string&> queryLogger_;
 };
 
   }
