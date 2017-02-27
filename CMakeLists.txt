@@ -108,7 +108,12 @@ OPTION(ENABLE_LIBWTTEST "Build Wt::Test" ON)
 OPTION(ENABLE_LIBWTDBO "Build Wt::Dbo" ON)
 OPTION(WT_NO_STD_LOCALE "Build Wt to run on a system without std::locale support" OFF)
 OPTION(WT_NO_STD_WSTRING "Build Wt to run on a system without std::wstring support" OFF)
+OPTION(WT_NO_CSS_PARSER "Don't build CssParser" OFF)
 OPTION(ENABLE_OPENGL "Build Wt with support for server-side opengl rendering" ON)
+
+if(WT_NO_CSS_PARSER)
+  add_definitions(-DWT_NO_CSS_PARSER=1)
+endif()
 
 # C++11 vs C++98
 # Binary compatibility is not guaranteed. We give our users the choice on

@@ -7,7 +7,7 @@
 
 using namespace Wt::Render;
 
-#if !defined(WT_NO_SPIRIT) && BOOST_VERSION >= 104700
+#if !defined(WT_NO_SPIRIT) && !defined(WT_NO_CSS_PARSER) && BOOST_VERSION >= 104700
 #  define CSS_PARSER
 #endif
 
