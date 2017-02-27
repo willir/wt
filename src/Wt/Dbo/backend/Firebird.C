@@ -215,8 +215,7 @@ namespace Wt
 
 	virtual void execute()
 	{
-	  if (conn_.showQueries())
-	    std::cerr << sql_ << std::endl;
+	  conn_.showQueries(sql_);
 
 	  try {
 	    m_stmt->Execute();

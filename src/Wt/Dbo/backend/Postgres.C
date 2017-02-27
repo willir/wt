@@ -196,8 +196,7 @@ public:
 
   virtual void execute()
   {
-    if (conn_.showQueries())
-      std::cerr << sql_ << std::endl;
+    conn_.showQueries(sql_);
 
     if (!result_) {
       paramValues_ = new char *[params_.size()];
@@ -597,8 +596,7 @@ void Postgres::executeSql(const std::string &sql)
   PGresult *result;
   int err;
 
-  if (showQueries())
-    std::cerr << sql << std::endl;
+  showQueries(sql);
 
   result = PQexec(conn_, sql.c_str());
   err = PQresultStatus(result);

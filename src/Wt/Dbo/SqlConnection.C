@@ -10,6 +10,8 @@
 #include "SqlConnection"
 #include <boost/lexical_cast.hpp>
 
+#include <iostream>
+
 #include <cassert>
 
 namespace Wt {
@@ -79,10 +81,24 @@ std::string SqlConnection::property(const std::string& name) const
     return std::string();
 }
 
+static void logQueryToCerr(const std::string& queryAsStr) {
+  std::cerr << queryAsStr << std::endl;
+};
+
 void SqlConnection::setProperty(const std::string& name,
 				const std::string& value)
 {
+
+
   properties_[name] = value;
+  if (name == "show-queries") {
+    std::cerr << "setProperty(\"show-queries\") is deprecated. One should use setShowQueriesHandler instead" << std::endl;
+    if (value == "true") {
+      setShowQueriesHandler(&logQueryToCerr);
+    } else {
+      setShowQueriesHandler(NULL);
+    }
+  }
 }
 
 bool SqlConnection::usesRowsFromTo() const
@@ -110,9 +126,16 @@ const char *SqlConnection::alterTableConstraintString() const
   return "constraint";
 }
 
-bool SqlConnection::showQueries() const
+void SqlConnection::setShowQueriesHandler(const boost::function1<void, const std::string&> &handler)
 {
-  return property("show-queries") == "true";
+  queryLogger_ = handler;
+}
+
+void SqlConnection::showQueries(const std::string &queryAsStr) const
+{
+  if (queryLogger_) {
+    queryLogger_(queryAsStr);
+  }
 }
 
 void SqlConnection::setTransactionIsolationLevel(TransactionIsolationLevel transactionIsolationLevel) {

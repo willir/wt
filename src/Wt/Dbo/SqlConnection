@@ -10,6 +10,9 @@
 #include <map>
 #include <string>
 #include <vector>
+
+#include <boost/function.hpp>
+
 #include <Wt/Dbo/WDboDllDefs.h>
 
 namespace Wt {
@@ -287,7 +290,8 @@ public:
   virtual std::string forUpdateClause(bool noWait) const;
   //@}
 
-  bool showQueries() const;
+  void setShowQueriesHandler(const boost::function1<void, const std::string&> &handler);
+  void showQueries(const std::string& sqlAsQuery) const;
 
   void setTransactionIsolationLevel(TransactionIsolationLevel transactionIsolationLevel);
 
@@ -303,6 +307,8 @@ private:
 
   StatementMap statementCache_;
   std::map<std::string, std::string> properties_;
+
+  boost::function1<void, const std::string&> queryLogger_;
 };
 
   }

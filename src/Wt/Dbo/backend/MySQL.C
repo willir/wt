@@ -358,8 +358,7 @@ class MySQLStatement : public SqlStatement
 
     virtual void execute()
     {
-      if (conn_.showQueries())
-        std::cerr << sql_ << std::endl;
+      conn_.showQueries(sql_);
 
       conn_.checkConnection();
       if(mysql_stmt_bind_param(stmt_, &in_pars_[0]) == 0){
@@ -1013,8 +1012,7 @@ SqlStatement *MySQL::prepareStatement(const std::string& sql)
 
 void MySQL::executeSql(const std::string &sql)
 {
-  if (showQueries())
-    std::cerr << sql << std::endl;
+  showQueries(sql);
 
   checkConnection();
   if( mysql_query(impl_->mysql, sql.c_str()) != 0 ){
@@ -1113,8 +1111,7 @@ void MySQL::setFractionalSecondsPart(int fractionalSecondsPart)
 
 void MySQL::startTransaction()
 {
-  if (showQueries())
-     std::cerr << "start transaction" << std::endl;
+  showQueries("start transaction");
 
   checkConnection();
   if( mysql_query(impl_->mysql, "start transaction") != 0 ){
@@ -1129,8 +1126,7 @@ void MySQL::startTransaction()
 void MySQL::commitTransaction()
 {
   my_bool status;
-  if (showQueries())
-     std::cerr << "commit transaction" << std::endl;
+  showQueries("commit transaction");
 
   checkConnection();
   if( (status = mysql_commit(impl_->mysql)) != 0 ){
@@ -1147,8 +1143,7 @@ void MySQL::commitTransaction()
 void MySQL::rollbackTransaction()
 {
   my_bool status;
-  if (showQueries())
-     std::cerr << "rollback" << std::endl;
+  showQueries("rollback");
 
   checkConnection();
   if((status =  mysql_rollback(impl_->mysql)) != 0 ){
