@@ -14,6 +14,9 @@
 #include <vector>
 #include <sstream>
 
+#include <boost/algorithm/string/predicate.hpp>
+#include <boost/algorithm/string/trim.hpp>
+
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/date_time/gregorian/gregorian.hpp>
 #include <boost/date_time/posix_time/time_parsers.hpp> 
@@ -42,15 +45,25 @@ static void handleErr(int err, PGresult *result, PGconn *conn)
       if (v)
         code = v;
     }
+    boost::trim(code);
+
+    const std::string errMsg = PQerrorMessage(conn);
+    if (code.empty()) {
+      std::cerr << "ERROR!!!: PostgreSQL Error Code is empty. err:" << err << " "
+                << "result:" << result << " errMsg:" << errMsg << std::endl;
+      if (boost::icontains(errMsg, "could not serialize access due to read/write dependencies among transactions")) {
+          code = "40001";
+      }
+    }
 
     if (code == "40P01") {
-      throw DeadLockException(PQerrorMessage(conn), code);
+      throw DeadLockException(errMsg, code);
 
     } else if (code == "40001") {
-      throw SerializationFailureException(PQerrorMessage(conn), code);
+      throw SerializationFailureException(errMsg, code);
 
     } else {
-      throw NonRetriableException(PQerrorMessage(conn), code);
+      throw NonRetriableException(errMsg, code);
     }
   }
 }
