@@ -99,6 +99,25 @@ public:
   SerializationFailureException(const std::string& error, const std::string& code);
 };
 
+class WTDBO_API ViolationException : public NonRetriableException
+{
+public:
+  ViolationException(const std::string& error, const std::string& code);
+  ViolationException(const std::string &name, const std::string& error, const std::string& code);
+};
+
+class WTDBO_API UniqViolationException : public ViolationException
+{
+public:
+  UniqViolationException(const std::string& error, const std::string& code);
+};
+
+class WTDBO_API ForeignKeyViolationException : public ViolationException
+{
+public:
+  ForeignKeyViolationException(const std::string& error, const std::string& code);
+};
+
 /*! \class ConnectionDbFailureException
  *  \brief %Exception thrown when connection to db failure is happened.
  *

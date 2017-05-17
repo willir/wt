@@ -39,6 +39,22 @@ StaleObjectException::StaleObjectException(const std::string& id, int version)
 	      + boost::lexical_cast<std::string>(version))
 { }
 
+ViolationException::ViolationException(const std::string& error, const std::string& code)
+  : NonRetriableException("ViolationException: " + error, code)
+{ }
+
+ViolationException::ViolationException(const std::string &name, const std::string& error, const std::string& code)
+  : NonRetriableException(name + ": " + error, code)
+{ }
+
+UniqViolationException::UniqViolationException(const std::string& error, const std::string& code)
+  : ViolationException("UniqViolationException", error, code)
+{ }
+
+ForeignKeyViolationException::ForeignKeyViolationException(const std::string& error, const std::string& code)
+  : ViolationException("ForeignKeyViolationException", error, code)
+{ }
+
 ConnectionDbFailureException::ConnectionDbFailureException(const std::string& error)
   : NonRetriableException(error)
 { }

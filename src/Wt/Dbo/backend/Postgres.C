@@ -62,6 +62,12 @@ static void handleErr(int err, PGresult *result, PGconn *conn)
     } else if (code == "40001") {
       throw SerializationFailureException(errMsg, code);
 
+    } else if (code == "23503") {
+      throw ForeignKeyViolationException(errMsg, code);
+
+    } else if (code == "23505") {
+      throw UniqViolationException(errMsg, code);
+
     } else {
       throw NonRetriableException(errMsg, code);
     }
