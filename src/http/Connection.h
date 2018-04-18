@@ -35,6 +35,25 @@ typedef boost::system::system_error asio_system_error;
 
 #include "Wt/WFlags"
 
+namespace Wt {
+
+#if BOOST_ASIO_VERSION >= 101200 // Boost 1.66+
+typedef boost::asio::io_context::strand BoostStrand;
+#else
+typedef boost::asio::strand BoostStrand;
+#endif
+
+void* bufferCastHelper(const boost::asio::const_buffer &b) {
+#if BOOST_ASIO_VERSION >= 101200 // Boost 1.66+
+    return (void*) b.data();
+#else
+    return (void*) boost::asio::detail::buffer_cast_helper(b);
+#endif
+}
+
+}
+
+
 namespace http {
 namespace server {
 
@@ -66,7 +85,7 @@ public:
   virtual ~Connection();
 
   Server *server() const { return server_; }
-  asio::strand& strand() { return strand_; }
+  Wt::BoostStrand& strand() { return strand_; }
 
   /// Stop all asynchronous operations associated with the connection.
   void scheduleStop();
@@ -104,7 +123,7 @@ protected:
   /// The manager for this connection.
   ConnectionManager& ConnectionManager_;
 
-  asio::strand strand_;
+  Wt::BoostStrand strand_;
 
   void finishReply();
 

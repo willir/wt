@@ -329,7 +329,7 @@ void Connection::handleReadBody(ReplyPtr reply,
       disconnectCallback_ = boost::function<void()>();
       f();
     } else if (e != asio::error::operation_aborted) {
-      LOG_ERROR(socket().native()
+      LOG_ERROR(socket().native_handle()
 		<< ": handleReadBody(): while waiting for disconnect, "
 		"unexpected error code: " << e.message());
       close();
@@ -375,7 +375,7 @@ void Connection::startWriteResponse(ReplyPtr reply)
     int size = asio::buffer_size(buffers[i]);
     s += size;
 #ifdef DEBUG_DUMP
-    char *data = (char *)asio::detail::buffer_cast_helper(buffers[i]);
+    char *data = (char *)Wt::bufferCastHelper(buffers[i]);
     for (int j = 0; j < size; ++j)
       std::cerr << data[j];
 #endif

@@ -113,7 +113,7 @@ private:
   Wt::WLogger accessLogger_;
 
   /// The strand for handleTcpAccept(), handleSslAccept() and handleStop()
-  asio::strand accept_strand_;
+  Wt::BoostStrand accept_strand_;
 
   /// Acceptor used to listen for incoming http connections.
   asio::ip::tcp::acceptor tcp_acceptor_;

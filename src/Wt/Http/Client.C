@@ -578,7 +578,11 @@ private:
 
 protected:
   WIOService& ioService_;
+#if BOOST_ASIO_VERSION >= 101200 // Boost 1.66+
+  boost::asio::io_context::strand strand_;
+#else
   boost::asio::strand strand_;
+#endif
   tcp::resolver resolver_;
   boost::asio::streambuf requestBuf_;
   boost::asio::streambuf responseBuf_;
