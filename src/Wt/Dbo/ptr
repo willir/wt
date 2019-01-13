@@ -89,7 +89,7 @@ public:
     : session_(session), version_(version), forUpdate_(boost::indeterminate), state_(state), refCount_(0)
   { }
 
-  virtual ~MetaDboBase();
+  virtual ~MetaDboBase() noexcept(false);
 
   void transactionDone(bool success);
 
@@ -358,7 +358,7 @@ public:
   typedef typename dbo_traits<C>::IdType IdType;
 
   MetaDbo(C *obj);
-  virtual ~MetaDbo();
+  virtual ~MetaDbo() noexcept(false);
 
   virtual Impl::MappingInfo *getMapping();
   virtual void flush();

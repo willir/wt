@@ -46,7 +46,7 @@ namespace Wt {
     }
 
 template <class C>
-MetaDbo<C>::~MetaDbo()
+MetaDbo<C>::~MetaDbo() noexcept(false)
 {
   if (refCount_)
     throw std::logic_error("Dbo: refCount > 0");

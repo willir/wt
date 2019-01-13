@@ -12,7 +12,7 @@
 namespace Wt {
   namespace Dbo {
 
-MetaDboBase::~MetaDboBase()
+MetaDboBase::~MetaDboBase() noexcept(false)
 { }
 
 void MetaDboBase::transactionDone(bool success)
