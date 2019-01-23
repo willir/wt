@@ -60,10 +60,12 @@ SET(Boost_COMPONENTS
     date_time
     regex
     program_options
-    signals
     system
     filesystem
     thread
+)
+SET(Boost_OPTIONAL_COMPONENTS
+    signals
 )
 IF(NOT WT_NO_BOOST_RANDOM)
   SET(Boost_COMPONENTS
@@ -76,6 +78,8 @@ ENDIF(NOT WT_NO_BOOST_RANDOM)
 FIND_PACKAGE(Boost 1.35
   COMPONENTS
     ${Boost_COMPONENTS}
+  OPTIONAL_COMPONENTS
+    ${Boost_OPTIONAL_COMPONENTS}
   REQUIRED
 )
 
