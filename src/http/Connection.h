@@ -43,7 +43,7 @@ typedef boost::asio::io_context::strand BoostStrand;
 typedef boost::asio::strand BoostStrand;
 #endif
 
-void* bufferCastHelper(const boost::asio::const_buffer &b) {
+inline void* bufferCastHelper(const boost::asio::const_buffer &b) {
 #if BOOST_ASIO_VERSION >= 101200 // Boost 1.66+
     return (void*) b.data();
 #else
