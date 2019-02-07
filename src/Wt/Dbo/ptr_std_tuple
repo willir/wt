@@ -1,0 +1,170 @@
+// This may look like C code, but it's really -*- C++ -*-
+/*
+ * Copyright (C) 2008 Emweb bvba, Kessel-Lo, Belgium.
+ *
+ * See the LICENSE file for terms of use.
+ */
+#ifndef WT_DBO_STD_TUPLE_PTR_H_
+#define WT_DBO_STD_TUPLE_PTR_H_
+
+#include <tuple>
+
+#include <Wt/Dbo/Query>
+
+namespace Wt { namespace Dbo {
+
+namespace ImplStd {
+
+template<int N, class T>
+struct helper {
+    using ElementType = std::tuple_element_t<N, T>;
+
+    static void getFields(Session &session, std::vector<std::string> *aliases,
+                          std::vector<FieldInfo> &result) {
+        helper<N - 1, T>::getFields(session, aliases, result);
+        query_result_traits<ElementType>::getFields(session, aliases, result);
+    }
+
+    static void load(Session &session, SqlStatement &statement, int &column, T &result) {
+        helper<N - 1, T>::load(session, statement, column, result);
+
+        std::get<N>(result) = query_result_traits<ElementType>::load(session, statement, column);
+    }
+
+    static void getValues(const T &result, std::vector<boost::any> &values) {
+        helper<N - 1, T>::getValues(result, values);
+
+        query_result_traits<ElementType>::getValues(std::get<N>(result), values);
+    }
+
+    static void setValue(T &result, int &index, const boost::any &value) {
+        if (index >= 0) {
+            helper<N - 1, T>::setValue(result, index, value);
+
+            if (index >= 0) {
+                query_result_traits<ElementType>::setValue(std::get<N>(result), index, value);
+            }
+        }
+    }
+
+    static void create(T &result) {
+        helper<N - 1, T>::create(result);
+
+        std::get<N>(result) = query_result_traits<ElementType>::create();
+    }
+
+    static void add(Session &session, T &result) {
+        helper<N - 1, T>::add(session, result);
+
+        query_result_traits<ElementType>::add(session, std::get<N>(result));
+    }
+
+    static void remove(T &result) {
+        helper<N - 1, T>::remove(result);
+
+        query_result_traits<ElementType>::remove(std::get<N>(result));
+    }
+};
+
+template<class T>
+struct helper<-1, T> {
+    static void getFields(Session &session, std::vector<std::string> *aliases,
+                          std::vector<FieldInfo> &result) {}
+
+    static void load(Session &session, SqlStatement &statement, int &column, T &result) {}
+
+    static void getValues(const T &result, std::vector<boost::any> &values) {}
+
+    static void setValue(T &result, int &index, const boost::any &value) {}
+
+    static void create(T &result) {}
+
+    static void add(Session &session, T &result) {}
+
+    static void remove(T &result) {}
+};
+
+} // namespace ImplStd
+
+template<class... T>
+struct query_result_traits<std::tuple<T...>> {
+    typedef std::tuple<T...> tuple_type;
+    typedef ImplStd::helper<std::tuple_size<tuple_type>::value - 1, tuple_type> helper;
+
+    static void getFields(Session &session, std::vector<std::string> *aliases,
+                          std::vector<FieldInfo> &result);
+
+    static tuple_type load(Session &session, SqlStatement &statement, int &column);
+
+    static void getValues(const tuple_type &t, std::vector<boost::any> &values);
+
+    static void setValue(tuple_type &t, int &index, const boost::any &value);
+
+    static tuple_type create();
+    static void add(Session &session, tuple_type &t);
+    static void remove(tuple_type &t);
+
+    static long long id(const tuple_type &ptr);
+    static tuple_type findById(Session &session, long long id);
+};
+
+template<class... T>
+void query_result_traits<std::tuple<T...>>::getFields(Session &session,
+                                                      std::vector<std::string> *aliases,
+                                                      std::vector<FieldInfo> &result) {
+    helper::getFields(session, aliases, result);
+}
+
+template<class... T>
+std::tuple<T...> query_result_traits<std::tuple<T...>>::load(Session &session,
+                                                             SqlStatement &statement, int &column) {
+    tuple_type result;
+
+    helper::load(session, statement, column, result);
+
+    return result;
+}
+
+template<class... T>
+void query_result_traits<std::tuple<T...>>::getValues(const tuple_type &t,
+                                                      std::vector<boost::any> &values) {
+    helper::getValues(t, values);
+}
+
+template<class... T>
+void query_result_traits<std::tuple<T...>>::setValue(tuple_type &t, int &index,
+                                                     const boost::any &value) {
+    helper::setValue(t, index, value);
+}
+
+template<class... T>
+std::tuple<T...> query_result_traits<std::tuple<T...>>::create() {
+    tuple_type result;
+
+    helper::create(result);
+
+    return result;
+}
+
+template<class... T>
+void query_result_traits<std::tuple<T...>>::add(Session &session, tuple_type &t) {
+    helper::add(session, t);
+}
+
+template<class... T>
+void query_result_traits<std::tuple<T...>>::remove(tuple_type &t) {
+    helper::remove(t);
+}
+
+template<class... T>
+long long query_result_traits<std::tuple<T...>>::id(const tuple_type &t) {
+    return -1;
+}
+
+template<class... T>
+std::tuple<T...> query_result_traits<std::tuple<T...>>::findById(Session &session, long long id) {
+    return tuple_type();
+}
+}} // namespace Wt::Dbo
+
+#endif // WT_DBO_STD_TUPLE_PTR_H_

@@ -10,6 +10,8 @@
 #include <boost/tuple/tuple.hpp>
 #include <Wt/Dbo/Query>
 
+#include "ptr_std_tuple"
+
 namespace Wt {
   namespace Dbo {
 
