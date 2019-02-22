@@ -109,6 +109,7 @@ OPTION(ENABLE_LIBWTDBO "Build Wt::Dbo" ON)
 OPTION(WT_NO_STD_LOCALE "Build Wt to run on a system without std::locale support" OFF)
 OPTION(WT_NO_STD_WSTRING "Build Wt to run on a system without std::wstring support" OFF)
 OPTION(WT_NO_CSS_PARSER "Don't build CssParser" OFF)
+OPTION(LIBWTDBO_ONLY "Build only Wt::Dbo" OFF)
 OPTION(ENABLE_OPENGL "Build Wt with support for server-side opengl rendering" ON)
 
 if(WT_NO_CSS_PARSER)
