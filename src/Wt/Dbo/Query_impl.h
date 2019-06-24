@@ -93,6 +93,14 @@ QueryBase<Result>::QueryBase(Session& session, const std::string& table,
 }
 
 template <class Result>
+QueryBase<Result>::QueryBase(const QueryBase<Result>& other)
+  : session_(other.session_),
+    sql_(other.sql_),
+    selectFieldLists_(other.selectFieldLists_),
+    simpleCount_(other.simpleCount_)
+{ }
+
+template <class Result>
 QueryBase<Result>& QueryBase<Result>::operator=(const QueryBase<Result>& other)
 {
   session_ = other.session_;
@@ -100,7 +108,7 @@ QueryBase<Result>& QueryBase<Result>::operator=(const QueryBase<Result>& other)
   selectFieldLists_ = other.selectFieldLists_;
   simpleCount_ = other.simpleCount_;
 
-  return *this;
+    return *this;
 }
 
 template <class Result>
