@@ -18,15 +18,15 @@ public:
   void populateSubMenu(Wt::WMenu *menu);
 
 private:
-  Wt::WWidget *containers();
-  Wt::WWidget *templates();
-  Wt::WWidget *text();
-  Wt::WWidget *grouping();
-  Wt::WWidget *layoutManagers();
-  Wt::WWidget *dialogs();
-  Wt::WWidget *images();
-  Wt::WWidget *css();
-  Wt::WWidget *themes();
+  std::unique_ptr<Wt::WWidget> containers();
+  std::unique_ptr<Wt::WWidget> templates();
+  std::unique_ptr<Wt::WWidget> text();
+  std::unique_ptr<Wt::WWidget> grouping();
+  std::unique_ptr<Wt::WWidget> layoutManagers();
+  std::unique_ptr<Wt::WWidget> dialogs();
+  std::unique_ptr<Wt::WWidget> images();
+  std::unique_ptr<Wt::WWidget> css();
+  std::unique_ptr<Wt::WWidget> themes();
   Wt::WWidget *loadingIndicator();
   void loadingIndicatorSelected(Wt::WString indicator);
 };

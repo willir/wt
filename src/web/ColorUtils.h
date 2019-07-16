@@ -10,17 +10,19 @@
 #include <string>
 #include <vector>
 
-#include <Wt/WString>
-#include <Wt/WColor>
+#include <Wt/WString.h>
+#include <Wt/WColor.h>
 
 namespace Wt {
   namespace Color {
 #ifdef WT_TARGET_JAVA	
     class ColorUtils {
+    private:
+      ColorUtils() { }
     };
 #endif //WT_TARGET_JAVA
 
-    extern WColor parseCssColor(const std::string &name);
+    extern WT_API WColor parseCssColor(const std::string &name);
   }
 }
 

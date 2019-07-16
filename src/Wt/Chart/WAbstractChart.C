@@ -3,10 +3,12 @@
  *
  * See the LICENSE file for terms of use.
  */
-#include "Wt/WAbstractItemModel"
-#include "Wt/WLogger"
-#include "Wt/Chart/WAbstractChart"
-#include "Wt/Chart/WChartPalette"
+#include "Wt/WAbstractItemModel.h"
+#include "Wt/WLogger.h"
+#include "Wt/Chart/WAbstractChart.h"
+#include "Wt/Chart/WAbstractChartModel.h"
+#include "Wt/Chart/WChartPalette.h"
+#include "Wt/Chart/WStandardChartProxyModel.h"
 
 namespace Wt {
 
@@ -14,28 +16,22 @@ LOGGER("Chart.WAbstractChart");
 
   namespace Chart {
 
-WAbstractChart::WAbstractChart(WContainerWidget *parent)
-  : WPaintedWidget(parent),
-    model_(0),
-    background_(white),
-    palette_(0),
+WAbstractChart::WAbstractChart()
+  : background_(StandardColor::White),
     autoPadding_(false)
 {
-  titleFont_.setFamily(WFont::SansSerif);
-  titleFont_.setSize(WFont::FixedSize, WLength(15, WLength::Point));
+  titleFont_.setFamily(FontFamily::SansSerif);
+  titleFont_.setSize(WLength(15, LengthUnit::Point));
 
-  setPlotAreaPadding(5, Left | Right);
-  setPlotAreaPadding(5, Top | Bottom);
+  setPlotAreaPadding(5, Side::Left | Side::Right);
+  setPlotAreaPadding(5, Side::Top | Side::Bottom);
 }
 
 WAbstractChart::~WAbstractChart()
-{
-  delete palette_;
-}
+{ }
 
-void WAbstractChart::setPalette(WChartPalette *palette)
+void WAbstractChart::setPalette(const std::shared_ptr<WChartPalette>& palette)
 {
-  delete palette_;
   palette_ = palette;
 
   update();
@@ -43,26 +39,26 @@ void WAbstractChart::setPalette(WChartPalette *palette)
 
 void WAbstractChart::setPlotAreaPadding(int padding, WFlags<Side> sides)
 {
-  if (sides & Top)
+  if (sides.test(Side::Top))
     padding_[0] = padding;
-  if (sides & Right)
+  if (sides.test(Side::Right))
     padding_[1] = padding;
-  if (sides & Bottom)
+  if (sides.test(Side::Bottom))
     padding_[2] = padding;
-  if (sides & Left)
+  if (sides.test(Side::Left))
     padding_[3] = padding;
 }
 
 int WAbstractChart::plotAreaPadding(Side side) const
 {
   switch (side) {
-  case Top:
+  case Side::Top:
     return padding_[0];
-  case Right:
+  case Side::Right:
     return padding_[1];
-  case Bottom:
+  case Side::Bottom:
     return padding_[2];
-  case Left:
+  case Side::Left:
     return padding_[3];
   default:
     LOG_ERROR("plotAreaPadding(): improper side.");
@@ -95,37 +91,36 @@ void WAbstractChart::setAxisTitleFont(const WFont& titleFont)
   set(axisTitleFont_, titleFont);
 }
 
-void WAbstractChart::setModel(WAbstractItemModel *model)
+void WAbstractChart::setModel(const std::shared_ptr<WAbstractChartModel>& model)
 {
   if (model_) {
     /* disconnect slots from previous model */
     for (unsigned i = 0; i < modelConnections_.size(); ++i)
       modelConnections_[i].disconnect();
-
     modelConnections_.clear();
   }
 
   model_ = model;
 
-  /* connect slots to new model */
-  modelConnections_.push_back(model_->columnsInserted().connect
-		      (this, &WAbstractChart::modelColumnsInserted));
-  modelConnections_.push_back(model_->columnsRemoved().connect
-		      (this, &WAbstractChart::modelColumnsRemoved));
-  modelConnections_.push_back(model_->rowsInserted().connect
-		      (this, &WAbstractChart::modelRowsInserted));
-  modelConnections_.push_back(model_->rowsRemoved().connect
-		      (this, &WAbstractChart::modelRowsRemoved));
-  modelConnections_.push_back(model_->dataChanged().connect
-		      (this, &WAbstractChart::modelDataChanged));
-  modelConnections_.push_back(model_->layoutChanged().connect
+  modelConnections_.push_back(model_->changed().connect
 		      (this, &WAbstractChart::modelReset));
-  modelConnections_.push_back(model_->modelReset().connect
-		      (this, &WAbstractChart::modelReset));
-  modelConnections_.push_back(model_->headerDataChanged().connect
-		      (this, &WAbstractChart::modelHeaderDataChanged));
 
   modelChanged();
+}
+
+void WAbstractChart::setModel(const std::shared_ptr<WAbstractItemModel>& model)
+{
+  setModel(std::shared_ptr<WAbstractChartModel>(std::make_shared<WStandardChartProxyModel>(model)));
+}
+
+std::shared_ptr<WAbstractItemModel> WAbstractChart::itemModel() const
+{
+  WStandardChartProxyModel *proxy
+    = dynamic_cast<WStandardChartProxyModel *>(model_.get());
+  if (proxy)
+    return proxy->sourceModel();
+  else
+    return nullptr;
 }
 
 void WAbstractChart::modelChanged()

@@ -3,7 +3,7 @@
 #include "IsapiRequest.h"
 
 #include <windows.h>
-#include <WtsApi32.h>
+#include <wtsapi32.h>
 #include <httpext.h>
 
 #include <fstream>
@@ -19,6 +19,7 @@ namespace {
 
 BOOL WINAPI GetExtensionVersion(HSE_VERSION_INFO* pVer)
 {
+  //DebugBreak();
 #if 0
 //#ifdef _DEBUG
   char buffer[2048];

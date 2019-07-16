@@ -4,25 +4,29 @@
  * See the LICENSE file for terms of use.
  */
 
-#include "Wt/Dbo/SqlConnection"
-#include "Wt/Dbo/SqlStatement"
-#include "Wt/Dbo/Exception"
-#include "SqlConnection"
-#include <boost/lexical_cast.hpp>
+#include "Wt/Dbo/SqlConnection.h"
+#include "Wt/Dbo/SqlStatement.h"
+#include "Wt/Dbo/Exception.h"
+#include "SqlConnection.h"
 
 #include <iostream>
 
 #include <cassert>
+#include <iostream>
 
 namespace Wt {
   namespace Dbo {
 
+namespace {
+  static const std::size_t WARN_NUM_STATEMENTS_THRESHOLD = 10;
+}
+
 SqlConnection::SqlConnection()
-  : transactionIsolationLevel_(READ_COMMITTED)
+  : transactionIsolationLevel_(TransactionIsolationLevel::ReadCommitted)
 { }
 
 SqlConnection::SqlConnection(const SqlConnection& other)
-  : transactionIsolationLevel_(READ_COMMITTED),
+  : transactionIsolationLevel_(TransactionIsolationLevel::ReadCommitted),
     properties_(other.properties_)
 { }
 
@@ -33,42 +37,51 @@ SqlConnection::~SqlConnection()
 
 void SqlConnection::clearStatementCache()
 {
-  for (StatementMap::iterator i = statementCache_.begin();
-       i != statementCache_.end(); ++i)
-    delete i->second;
-
   statementCache_.clear();
 }
 
 void SqlConnection::executeSql(const std::string& sql)
 {
-  SqlStatement *s = prepareStatement(sql);
+  std::unique_ptr<SqlStatement> s = prepareStatement(sql);
   s->execute();
-  delete s;
 }
 
-SqlStatement *SqlConnection::getStatement(const std::string& id) const
+void SqlConnection::executeSqlStateful(const std::string& sql)
 {
-  StatementMap::const_iterator i = statementCache_.find(id);
-  if (i != statementCache_.end()) {
-    SqlStatement *result = i->second;
-    /*
-     * Later, if already in use, manage reentrant use by cloning the statement
-     * and adding it to a linked list in the statementCache_
-     */
-    if (!result->use())
-      throw Exception("A collection for '" + id + "' is already in use."
-		      " Reentrant statement use is not yet implemented."); 
+  statefulSql_.push_back(sql);
+  executeSql(sql);
+}
 
-    return result;
-  } else
-    return 0;
+SqlStatement *SqlConnection::getStatement(const std::string& id)
+{
+  StatementMap::const_iterator start;
+  StatementMap::const_iterator end;
+  std::tie(start, end) = statementCache_.equal_range(id);
+  SqlStatement *result = nullptr;
+  for (auto i = start; i != end; ++i) {
+    result = i->second.get();
+    if (result->use())
+      return result;
+  }
+  if (result) {
+    auto count = statementCache_.count(id);
+    if (count >= WARN_NUM_STATEMENTS_THRESHOLD) {
+      std::cerr << "Warning: number of instances (" << (count + 1) << ") of prepared statement '"
+                << id << "' for this "
+                   "connection exceeds threshold (" << WARN_NUM_STATEMENTS_THRESHOLD << ")"
+                   ". This could indicate a programming error.\n";
+    }
+    auto stmt = prepareStatement(result->sql());
+    result = stmt.get();
+    saveStatement(id, std::move(stmt));
+  }
+  return nullptr;
 }
 
 void SqlConnection::saveStatement(const std::string& id,
-				  SqlStatement *statement)
+				  std::unique_ptr<SqlStatement> statement)
 {
-  statementCache_[id] = statement;
+  statementCache_.emplace(id, std::move(statement));
 }
 
 std::string SqlConnection::property(const std::string& name) const
@@ -108,7 +121,7 @@ bool SqlConnection::usesRowsFromTo() const
 
 LimitQuery SqlConnection::limitQueryMethod() const
 {
-  return Limit;
+  return LimitQuery::Limit;
 }
 
 bool SqlConnection::supportAlterTable() const
@@ -126,7 +139,7 @@ const char *SqlConnection::alterTableConstraintString() const
   return "constraint";
 }
 
-void SqlConnection::setShowQueriesHandler(const boost::function1<void, const std::string&> &handler)
+void SqlConnection::setShowQueriesHandler(const std::function<void(const std::string&)> &handler)
 {
   queryLogger_ = handler;
 }
@@ -147,7 +160,7 @@ std::string SqlConnection::textType(int size) const
   if (size == -1)
     return "text";
   else{
-    return "varchar(" + boost::lexical_cast<std::string>(size) + ")";
+    return "varchar(" + std::to_string(size) + ")";
   }
 }
 
@@ -171,13 +184,24 @@ bool SqlConnection::requireSubqueryAlias() const
   return false;
 }
 
+std::string SqlConnection::autoincrementInsertInfix(const std::string &) const
+{
+  return "";
+}
+
 void SqlConnection::prepareForDropTables()
 { }
 
-std::string SqlConnection::forUpdateClause(bool noWait) const
+std::vector<SqlStatement *> SqlConnection::getStatements() const
 {
-  return (!noWait) ? "FOR UPDATE" : "FOR UPDATE NOWAIT";
-}
+  std::vector<SqlStatement *> result;
 
+  for (StatementMap::const_iterator i = statementCache_.begin();
+       i != statementCache_.end(); ++i)
+    result.push_back(i->second.get());
+
+  return result;
+}
+  
   }
 }

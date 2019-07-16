@@ -1,59 +1,60 @@
-#include <Wt/WCalendar>
-#include <Wt/WDate>
-#include <Wt/WTimeEdit>
-#include <Wt/WLabel>
-#include <Wt/WPushButton>
-#include <Wt/WText>
-#include <Wt/WTemplate>
-#include <Wt/WString>
+#include <Wt/WCalendar.h>
+#include <Wt/WDate.h>
+#include <Wt/WTimeEdit.h>
+#include <Wt/WLabel.h>
+#include <Wt/WPushButton.h>
+#include <Wt/WText.h>
+#include <Wt/WTemplate.h>
+#include <Wt/WString.h>
 
 SAMPLE_BEGIN(TimeEdit)
-Wt::WTemplate *form = new Wt::WTemplate(Wt::WString::tr("timeEdit-template"));
+auto form = Wt::cpp14::make_unique<Wt::WTemplate>(Wt::WString::tr("timeEdit-template"));
 form->addFunction("id", &Wt::WTemplate::Functions::id);
 
-Wt::WTimeEdit *de1 = new Wt::WTimeEdit();
-form->bindWidget("from", de1);
-de1->setTime(Wt::WTime::currentServerTime());
+auto te1 = form->bindWidget("from", Wt::cpp14::make_unique<Wt::WTimeEdit>());
+form->bindString("from-format", te1->format());
+te1->setTime(Wt::WTime::currentTime());
 
-Wt::WTimeEdit *de2 = new Wt::WTimeEdit();
-form->bindWidget("to", de2);
-de2->setFormat("HH:mm:ss"); // Apply a different date format.
+auto te2 = form->bindWidget("to", Wt::cpp14::make_unique<Wt::WTimeEdit>());
+#ifndef WT_TARGET_JAVA
+te2->setFormat("h:mm:ss.zzz AP");
+#else
+te2->setFormat("h:mm:ss.SSS a");
+#endif
+te2->setTime(Wt::WTime::currentTime().addSecs(60*15));
+form->bindString("to-format", te2->format());
 
-Wt::WPushButton *button = new Wt::WPushButton("Save");
-form->bindWidget("save", button);
+auto button = form->bindWidget("save", Wt::cpp14::make_unique<Wt::WPushButton>("Save"));
 
-Wt::WText *out = new Wt::WText();
-form->bindWidget("out", out);
+auto out = form->bindWidget("out", Wt::cpp14::make_unique<Wt::WText>());
 
-de1->changed().connect(std::bind([=] () {
-    if (de1->validate() == Wt::WValidator::Valid) {
-    out->setText("Time picker 1 is changed.");
+te1->changed().connect([=] {
+    if (te1->validate() == Wt::ValidationState::Valid) {
+      out->setText("Time picker 1 is changed.");
     }
-}));
+});
 
-de2->changed().connect(std::bind([=] () {
-    if (de1->validate() == Wt::WValidator::Valid) {
-    out->setText("Time picker 2 is changed.");
+te2->changed().connect([=] {
+    if (te2->validate() == Wt::ValidationState::Valid) {
+      out->setText("Time picker 2 is changed.");
     }
-}));
+});
 
-button->clicked().connect(std::bind([=] () {
-    if (de1->text().empty() || de2->text().empty())
-	out->setText("You should enter two time!");
+button->clicked().connect([=] {
+    if (te1->text().empty() || te2->text().empty())
+        out->setText("You should enter two times!");
     else {
-	int secs = de1->time().secsTo(de2->time()) + 1;
-	if (secs <= 3600)
-	    out->setText("This is a really small range of time");
-	else if (secs > 3600) 
-	    out->setText(Wt::WString("So, you want to be delivered between "
-				     "{1} and {2} ?...").arg(de1->time().toString()).arg(de2->time().toString()));
+    long secs = te1->time().secsTo(te2->time()) + 1;
+	if (secs <= 60*10)
+	  out->setText("This is a really small range of time");
 	else
-	    out->setText("Invalid period!");
-    }
+	  out->setText
+	    (Wt::WString("So, you want your package to be delivered between "
+	                 "{1} and {2}?")
+	     .arg(te1->time().toString())
+	     .arg(te2->time().toString()));
+    }  
+});
 
-  
-}));
-
-
-SAMPLE_END(return form)
+SAMPLE_END(return std::move(form))
 

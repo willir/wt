@@ -1,4 +1,4 @@
-#include <Wt/WAbstractItemModel>
+#include <Wt/WAbstractItemModel.h>
 
 #include "Git.h"
 
@@ -8,10 +8,14 @@ public:
     /*
      * A custom role for the file contents of a Git BLOB object.
      */
-    static const int ContentsRole = Wt::UserRole + 1;
+#ifndef WT_TARGET_JAVA
+    static constexpr Wt::ItemDataRole ContentsRole = Wt::ItemDataRole::User + 1;
+#else
+    static constexpr Wt::ItemDataRole ContentsRole = Wt::ItemDataRole::User.value() + 1;
+#endif
 
-    GitModel(const std::string& repository, Wt::WObject *parent = 0)
-	: WAbstractItemModel(parent)
+    GitModel(const std::string& repository)
+        : WAbstractItemModel()
     { 
 	git_.setRepositoryPath(repository);
 	loadRevision("master");
@@ -43,7 +47,7 @@ public:
     }
 
     virtual Wt::WModelIndex index(int row, int column,
-				  const Wt::WModelIndex& parent = Wt::WModelIndex()) const {
+                                  const Wt::WModelIndex& parent = Wt::WModelIndex()) const {
 	int parentId;
 
 	if (!parent.isValid())
@@ -78,20 +82,20 @@ public:
 	return treeData_[treeId].rowCount();
     }
 
-    virtual boost::any data(const Wt::WModelIndex& index, int role = Wt::DisplayRole) const {
+    virtual Wt::cpp17::any data(const Wt::WModelIndex& index, Wt::ItemDataRole role = Wt::ItemDataRole::Display) const {
 	if (!index.isValid())
-	    return boost::any();
+	    return Wt::cpp17::any();
 
 	Git::Object object = getObject(index);
 
 	switch (index.column()) {
 	case 0:
-	    if (role == Wt::DisplayRole) {
+	    if (role == Wt::ItemDataRole::Display) {
 		if (object.type == Git::Tree)
 		    return object.name + '/';
 		else
 		    return object.name;
-	    } else if (role == Wt::DecorationRole) {
+	    } else if (role == Wt::ItemDataRole::Decoration) {
 		if (object.type == Git::Blob)
 		    return std::string("icons/git-blob.png");
 		else if (object.type == Git::Tree)
@@ -103,7 +107,7 @@ public:
 
 	    break;
 	case 1:
-	    if (role == Wt::DisplayRole) {
+	    if (role == Wt::ItemDataRole::Display) {
 		if (object.type == Git::Tree)
 		    return std::string("Folder");
 		else {
@@ -125,28 +129,28 @@ public:
 		    else if (suffix == "txt")
 			return std::string("Text");
 		    else
-			return boost::any();
+			return Wt::cpp17::any();
 		}
 	    }
 	}
 
-	return boost::any();
+        return Wt::cpp17::any();
     }
   
-    virtual boost::any headerData(int section,
-				  Wt::Orientation orientation = Wt::Horizontal,
-				  int role = Wt::DisplayRole) const {
-	if (orientation == Wt::Horizontal && role == Wt::DisplayRole) {
+    virtual Wt::cpp17::any headerData(int section,
+                                  Wt::Orientation orientation = Wt::Orientation::Horizontal,
+                                  Wt::ItemDataRole role = Wt::ItemDataRole::Display) const {
+        if (orientation == Wt::Orientation::Horizontal && role == Wt::ItemDataRole::Display) {
 	    switch (section) {
 	    case 0:
 		return std::string("File");
 	    case 1:
 		return std::string("Type");
 	    default:
-		return boost::any();
+		return Wt::cpp17::any();
 	    }
 	} else
-	    return boost::any();
+	    return Wt::cpp17::any();
     }
 
 private:
@@ -171,8 +175,8 @@ private:
 	}
 
 #ifdef WT_TARGET_JAVA
-        bool equals(boost::any o) {
-	    ChildIndex *other = boost::any_cast<ChildIndex *>(o);
+	bool equals(Wt::cpp17::any o) {
+	    ChildIndex *other = Wt::cpp17::any_cast<ChildIndex *>(o);
 	    return parentId == other->parentId &&
 	        index == other->index;
 	}
@@ -261,6 +265,10 @@ private:
 	return !parent(index).isValid();
     }
 };
+
+#ifndef WT_TARGET_JAVA
+constexpr Wt::ItemDataRole GitModel::ContentsRole;
+#endif // WT_TARGET_JAVA
 
 SAMPLE_BEGIN(gitModel)
 SAMPLE_END(return 0)

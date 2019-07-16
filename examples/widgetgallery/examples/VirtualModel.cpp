@@ -1,10 +1,10 @@
-#include <Wt/WAbstractTableModel>
+#include <Wt/WAbstractTableModel.h>
 
 class VirtualModel : public Wt::WAbstractTableModel
 {
 public:
-  VirtualModel(int rows, int columns, Wt::WObject *parent = 0)
-    : Wt::WAbstractTableModel(parent),
+  VirtualModel(int rows, int columns)
+    : WAbstractTableModel(),
       rows_(rows),
       columns_(columns)
   { }
@@ -25,33 +25,31 @@ public:
       return 0;
   }
 
-  virtual boost::any data(const Wt::WModelIndex& index, int role = Wt::DisplayRole) const
+  virtual Wt::cpp17::any data(const Wt::WModelIndex& index, Wt::ItemDataRole role = Wt::ItemDataRole::Display) const
   {
-    switch (role) {
-    case Wt::DisplayRole:
+    if (role == Wt::ItemDataRole::Display) {
       if (index.column() == 0)
-	return Wt::WString("Row {1}").arg(index.row());
+        return Wt::WString("Row {1}").arg(index.row());
       else
-	return Wt::WString("Item row {1}, col {2}")
+        return Wt::WString("Item row {1}, col {2}")
 	  .arg(index.row()).arg(index.column());
-    default:
-      return boost::any();
+    } else {
+      return Wt::cpp17::any();
     }
   }
 
-  virtual boost::any headerData(int section,
-				Wt::Orientation orientation = Wt::Horizontal,
-				int role = Wt::DisplayRole) const
+  virtual Wt::cpp17::any headerData(int section,
+                                Wt::Orientation orientation = Wt::Orientation::Horizontal,
+                                Wt::ItemDataRole role = Wt::ItemDataRole::Display) const
   {
-    if (orientation == Wt::Horizontal) {
-      switch (role) {
-      case Wt::DisplayRole:
-	return Wt::WString("Column {1}").arg(section);
-      default:
-	return boost::any();
+    if (orientation == Wt::Orientation::Horizontal) {
+      if (role == Wt::ItemDataRole::Display) {
+        return Wt::WString("Column {1}").arg(section);
+      } else {
+        return Wt::cpp17::any();
       }
     } else
-      return boost::any();
+      return Wt::cpp17::any();
   }
 
 private:

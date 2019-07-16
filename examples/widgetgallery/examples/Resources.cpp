@@ -1,10 +1,10 @@
-#include <Wt/WContainerWidget>
-#include <Wt/WText>
+#include <Wt/WContainerWidget.h>
+#include <Wt/WText.h>
 
 SAMPLE_BEGIN(Resources)
-Wt::WContainerWidget *container = new Wt::WContainerWidget();
+auto container = Wt::cpp14::make_unique<Wt::WContainerWidget>();
 
-Wt::WText *out = new Wt::WText(container);
+Wt::WText *out = container->addWidget(Wt::cpp14::make_unique<Wt::WText>());
 out->setText("<p>Resources</p>");
 
 SAMPLE_END(return container)

@@ -3,14 +3,14 @@
  *
  * See the LICENSE file for terms of use.
  */
-#include "Wt/WPainterPath"
+#include "Wt/WPainterPath.h"
 
 #include <limits>
 
 #include <cmath>
 #include <cassert>
 
-#include "Wt/WStringStream"
+#include "Wt/WStringStream.h"
 
 #include "WebUtils.h"
 
@@ -26,7 +26,7 @@ namespace {
 
 namespace Wt {
 
-WPainterPath::Segment::Segment(double x, double y, Type type)
+WPainterPath::Segment::Segment(double x, double y, SegmentType type)
   : x_(x), y_(y), type_(type)
 { }
 
@@ -43,18 +43,21 @@ bool WPainterPath::Segment::operator!= (const Segment& other) const
 }
 
 WPainterPath::WPainterPath()
-  : isRect_(false)
+  : isRect_(false),
+    openSubPathsEnabled_(false)
 { }
 
 WPainterPath::WPainterPath(const WPointF& startPoint)
-  : isRect_(false)
+  : isRect_(false),
+    openSubPathsEnabled_(false)
 {
   moveTo(startPoint);
 }
 
 WPainterPath::WPainterPath(const WPainterPath& path)
   : WJavaScriptExposableObject(path),
-    isRect_(path.isRect_)
+    isRect_(path.isRect_),
+    openSubPathsEnabled_(path.openSubPathsEnabled_)
 #ifndef WT_TARGET_JAVA
     ,segments_(path.segments_)
 #endif
@@ -103,7 +106,7 @@ WPointF WPainterPath::beginPosition() const
   WPointF result(0, 0);
 
   for (unsigned int i = 0;
-       i < segments_.size() && segments_[i].type() == Segment::MoveTo;
+       i < segments_.size() && segments_[i].type() == MoveTo;
        ++i)
     result = WPointF(segments_[i].x(), segments_[i].y());
 
@@ -120,12 +123,12 @@ WPointF WPainterPath::positionAtSegment(int index) const
   if (index > 0) {
     const Segment& s = segments_[index - 1];
     switch (s.type()) {
-    case Segment::MoveTo:
-    case Segment::LineTo:
-    case Segment::CubicEnd:
-    case Segment::QuadEnd:
+    case MoveTo:
+    case LineTo:
+    case CubicEnd:
+    case QuadEnd:
       return WPointF(s.x(), s.y());
-    case Segment::ArcAngleSweep: {
+    case ArcAngleSweep: {
       int i = segments_.size() - 3;
       double cx = segments_[i].x();
       double cy = segments_[i].y();
@@ -151,7 +154,7 @@ WPointF WPainterPath::getSubPathStart() const
    * moveTo operation, or either (0, 0).
    */
   for (int i = segments_.size() - 1; i >= 0; --i)
-    if (segments_[i].type() == Segment::MoveTo)
+    if (segments_[i].type() == MoveTo)
       return WPointF(segments_[i].x(), segments_[i].y());
 
   return WPointF(0, 0);
@@ -166,7 +169,7 @@ void WPainterPath::closeSubPath()
 bool WPainterPath::isEmpty() const
 {
   for (unsigned i = 0; i < segments_.size(); ++i)
-    if (segments_[i].type() != Segment::MoveTo)
+    if (segments_[i].type() != MoveTo)
       return false;
 
   return true;
@@ -200,7 +203,9 @@ void WPainterPath::moveTo(double x, double y)
   /*
    * first close previous sub path
    */
-  if (!segments_.empty() && segments_.back().type() != Segment::MoveTo) {
+  if (!openSubPathsEnabled_ &&
+      !segments_.empty() && 
+      segments_.back().type() != MoveTo) {
     WPointF startP = getSubPathStart();
     WPointF currentP = currentPosition();
 
@@ -208,7 +213,7 @@ void WPainterPath::moveTo(double x, double y)
       lineTo(startP.x(), startP.y());
   }
 
-  segments_.push_back(Segment(x, y, Segment::MoveTo));  
+  segments_.push_back(Segment(x, y, MoveTo));  
 }
 
 void WPainterPath::lineTo(const WPointF& point)
@@ -219,7 +224,7 @@ void WPainterPath::lineTo(const WPointF& point)
 void WPainterPath::lineTo(double x, double y)
 {
   checkModifiable();
-  segments_.push_back(Segment(x, y, Segment::LineTo));
+  segments_.push_back(Segment(x, y, LineTo));
 }
 
 void WPainterPath::cubicTo(const WPointF& c1, const WPointF& c2,
@@ -232,9 +237,9 @@ void WPainterPath::cubicTo(double c1x, double c1y, double c2x, double c2y,
 			   double endPointx, double endPointy)
 {
   checkModifiable();
-  segments_.push_back(Segment(c1x, c1y, Segment::CubicC1));
-  segments_.push_back(Segment(c2x, c2y, Segment::CubicC2));
-  segments_.push_back(Segment(endPointx, endPointy, Segment::CubicEnd));
+  segments_.push_back(Segment(c1x, c1y, CubicC1));
+  segments_.push_back(Segment(c2x, c2y, CubicC2));
+  segments_.push_back(Segment(endPointx, endPointy, CubicEnd));
 }
 
 void WPainterPath::arcTo(double cx, double cy, double radius,
@@ -248,9 +253,10 @@ void WPainterPath::arcTo(double x, double y, double width, double height,
 			 double startAngle, double sweepLength)
 {
   checkModifiable();
-  segments_.push_back(Segment(x + width/2, y + height/2, Segment::ArcC));
-  segments_.push_back(Segment(width/2, height/2, Segment::ArcR));
-  segments_.push_back(Segment(startAngle, sweepLength, Segment::ArcAngleSweep));
+  segments_.push_back(Segment(x + width/2, y + height/2, ArcC));
+  segments_.push_back(Segment(width/2, height/2, ArcR));
+  segments_.push_back(Segment(startAngle, sweepLength, 
+			      ArcAngleSweep));
 }
 
 void WPainterPath::arcMoveTo(double cx, double cy, double radius, double angle)
@@ -268,8 +274,8 @@ void WPainterPath::quadTo(double cx, double cy,
 			  double endPointX, double endPointY)
 {
   checkModifiable();
-  segments_.push_back(Segment(cx, cy, Segment::QuadC));
-  segments_.push_back(Segment(endPointX, endPointY, Segment::QuadEnd));
+  segments_.push_back(Segment(cx, cy, QuadC));
+  segments_.push_back(Segment(endPointX, endPointY, QuadEnd));
 }
 
 void WPainterPath::quadTo(const WPointF& c, const WPointF& endPoint)
@@ -347,7 +353,7 @@ bool WPainterPath::asRect(WRectF& result) const
       result.setHeight(segments_[1].y());
       return true;
     } else if (segments_.size() == 5
-	       && segments_[0].type() == Segment::MoveTo) {
+	       && segments_[0].type() == MoveTo) {
       result.setX(segments_[0].x());
       result.setY(segments_[0].y());
       result.setWidth(segments_[1].x() - segments_[0].x());
@@ -374,13 +380,13 @@ WRectF WPainterPath::controlPointRect(const WTransform& transform) const
       const Segment& s = segments_[i];
 
       switch (s.type()) {
-      case Segment::MoveTo:
-      case Segment::LineTo:
-      case Segment::CubicC1:
-      case Segment::CubicC2:
-      case Segment::CubicEnd:
-      case Segment::QuadC:
-      case Segment::QuadEnd: {
+      case MoveTo:
+      case LineTo:
+      case CubicC1:
+      case CubicC2:
+      case CubicEnd:
+      case QuadC:
+      case QuadEnd: {
 	if (identity) {
 	  minX = std::min(s.x(), minX);
  	  minY = std::min(s.y(), minY);
@@ -395,7 +401,7 @@ WRectF WPainterPath::controlPointRect(const WTransform& transform) const
 	}
 	break;
       }
-      case Segment::ArcC: {
+      case ArcC: {
 	const Segment& s2 = segments_[i+1];
 
 	if (identity) {
@@ -468,6 +474,11 @@ WPainterPath WPainterPath::crisp() const
   return result;
 }
 
+void WPainterPath::setOpenSubPathsEnabled(bool enabled)
+{
+  openSubPathsEnabled_ = enabled;
+}
+
 bool WPainterPath::isPointInPath(const WPointF &p) const
 {
   bool res = false;
@@ -476,23 +487,23 @@ bool WPainterPath::isPointInPath(const WPointF &p) const
   for (std::size_t i = 0; i < segments_.size(); ++i) {
     double bx = ax;
     double by = ay;
-    if (segments_[i].type() == Segment::ArcC) {
+    if (segments_[i].type() == ArcC) {
       WPointF arcPos = getArcPosition(segments_[i].x(), segments_[i].y(),
 				      segments_[i+1].x(), segments_[i+1].y(),
 				      segments_[i+2].x());
       bx = arcPos.x();
       by = arcPos.y();
-    } else if (segments_[i].type() == Segment::ArcAngleSweep) {
+    } else if (segments_[i].type() == ArcAngleSweep) {
       WPointF arcPos = getArcPosition(segments_[i-2].x(), segments_[i-2].y(),
 				      segments_[i-1].x(), segments_[i-1].y(),
 				      segments_[i].x() + segments_[i].y());
       bx = arcPos.x();
       by = arcPos.y();
-    } else if (segments_[i].type() != Segment::ArcR) {
+    } else if (segments_[i].type() != ArcR) {
       bx = segments_[i].x();
       by = segments_[i].y();
     }
-    if (segments_[i].type() != Segment::MoveTo) {
+    if (segments_[i].type() != MoveTo) {
       if ( (ay > py) != (by > py) &&
 	   (px < (bx - ax) * (py - ay) / (by - ay) + ax) ) {
 	res = !res;

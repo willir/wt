@@ -1,36 +1,38 @@
-#include <Wt/WIconPair>
-#include <Wt/WText>
-#include <Wt/WTree>
-#include <Wt/WTreeNode>
+#include <Wt/WIconPair.h>
+#include <Wt/WText.h>
+#include <Wt/WTree.h>
+#include <Wt/WTreeNode.h>
 
 SAMPLE_BEGIN(Tree)
-Wt::WTree *tree = new Wt::WTree();
+std::unique_ptr<Wt::WTree> tree = Wt::cpp14::make_unique<Wt::WTree>();
 
-tree->setSelectionMode(Wt::ExtendedSelection);
+tree->setSelectionMode(Wt::SelectionMode::Extended);
 
-Wt::WIconPair *folderIcon 
-    = new Wt::WIconPair("icons/yellow-folder-closed.png",
+auto folderIcon
+    = Wt::cpp14::make_unique<Wt::WIconPair>("icons/yellow-folder-closed.png",
 			"icons/yellow-folder-open.png", false);
 
-Wt::WTreeNode *node = new Wt::WTreeNode("Furniture", folderIcon);
+auto node =
+    Wt::cpp14::make_unique<Wt::WTreeNode>("Furniture",std::move(folderIcon));
+tree->setTreeRoot(std::move(node));
 
-tree->setTreeRoot(node);
-node->label()->setTextFormat(Wt::PlainText);
-node->setLoadPolicy(Wt::WTreeNode::NextLevelLoading);
-node->addChildNode(new Wt::WTreeNode("Table"));
-node->addChildNode(new Wt::WTreeNode("Cupboard"));
 
-Wt::WTreeNode *three = new Wt::WTreeNode("Chair");
-node->addChildNode(three);
-node->addChildNode(new Wt::WTreeNode("Coach"));
-node->expand();
+tree->treeRoot()->label()->setTextFormat(Wt::TextFormat::Plain);
+tree->treeRoot()->setLoadPolicy(Wt::ContentLoading::NextLevel);
+tree->treeRoot()->addChildNode(Wt::cpp14::make_unique<Wt::WTreeNode>("Table"));
+tree->treeRoot()->addChildNode(Wt::cpp14::make_unique<Wt::WTreeNode>("Cupboard"));
 
-three->addChildNode(new Wt::WTreeNode("Doc"));
-three->addChildNode(new Wt::WTreeNode("Grumpy"));
-three->addChildNode(new Wt::WTreeNode("Happy"));
-three->addChildNode(new Wt::WTreeNode("Sneezy"));
-three->addChildNode(new Wt::WTreeNode("Dopey"));
-three->addChildNode(new Wt::WTreeNode("Bashful"));
-three->addChildNode(new Wt::WTreeNode("Sleepy"));
+auto subtree = Wt::cpp14::make_unique<Wt::WTreeNode>("Chair");
+auto subtree_ = tree->treeRoot()->addChildNode(std::move(subtree));
+tree->treeRoot()->addChildNode(Wt::cpp14::make_unique<Wt::WTreeNode>("Coach"));
+tree->treeRoot()->expand();
 
-SAMPLE_END(return tree)
+subtree_->addChildNode(Wt::cpp14::make_unique<Wt::WTreeNode>("Doc"));
+subtree_->addChildNode(Wt::cpp14::make_unique<Wt::WTreeNode>("Grumpy"));
+subtree_->addChildNode(Wt::cpp14::make_unique<Wt::WTreeNode>("Happy"));
+subtree_->addChildNode(Wt::cpp14::make_unique<Wt::WTreeNode>("Sneezy"));
+subtree_->addChildNode(Wt::cpp14::make_unique<Wt::WTreeNode>("Dopey"));
+subtree_->addChildNode(Wt::cpp14::make_unique<Wt::WTreeNode>("Bashful"));
+subtree_->addChildNode(Wt::cpp14::make_unique<Wt::WTreeNode>("Sleepy"));
+
+SAMPLE_END(return std::move(tree))

@@ -4,13 +4,13 @@
  * See the LICENSE file for terms of use.
  */
 
-#include "Wt/WPointF"
+#include "Wt/WPointF.h"
 
-#include "Wt/WLogger"
-#include "Wt/WStringStream"
+#include "Wt/WLogger.h"
+#include "Wt/WStringStream.h"
 
-#include "Wt/Json/Array"
-#include "Wt/Json/Value"
+#include "Wt/Json/Array.h"
+#include "Wt/Json/Value.h"
 
 #include "web/WebUtils.h"
 
@@ -91,7 +91,22 @@ WPointF WPointF::swapHV(double width) const
     WStringStream ss;
     char buf[30];
     ss << "((function(p){return [";
-    ss << Utils::round_js_str(width, 3, buf) << " - p[1],p[0]];})(" << jsRef() + "))";
+    ss << Utils::round_js_str(width, 3, buf) << "-p[1],p[0]];})(" << jsRef() + "))";
+    result.assignBinding(*this, ss.str());
+  }
+
+  return result;
+}
+
+WPointF WPointF::inverseSwapHV(double width) const
+{
+  WPointF result(y(), width - x());
+
+  if (isJavaScriptBound()) {
+    WStringStream ss;
+    char buf[30];
+    ss << "((function(p){return [";
+    ss << "p[1]," << Utils::round_js_str(width, 3, buf) << "-p[0]];})(" << jsRef() + "))";
     result.assignBinding(*this, ss.str());
   }
 

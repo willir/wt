@@ -23,6 +23,10 @@
 #include "Buffer.h"
 #include "Reply.h"
 
+#ifdef WTHTTP_WITH_ZLIB
+#include <zlib.h>
+#endif
+
 namespace http {
 namespace server {
 
@@ -41,6 +45,7 @@ public:
 
   /// Construct ready to parse the request method.
   RequestParser(Server *server);
+  ~RequestParser();
 
   /// Reset to initial parser state.
   void reset();
@@ -49,21 +54,26 @@ public:
   /// has been parsed, false if the data is invalid, indeterminate when more
   /// data is required. The iterator return value indicates how much
   /// of the input has been consumed.
-  boost::tuple<boost::tribool, Buffer::iterator>
-    parse(Request& req, Buffer::iterator begin, Buffer::iterator end);
+  boost::tuple<boost::tribool, char *>
+    parse(Request& req, char *begin, char *end);
 
   /// Validate
   Reply::status_type validate(Request& req);
 
   ParseResult parseBody(Request& req, ReplyPtr reply,
-		 Buffer::iterator& begin, Buffer::iterator end);
+		 char *& begin, char *end);
 
   bool initialState() const;
+  
+
+#ifdef WTHTTP_WITH_ZLIB
+  bool frameCompressed_;
+#endif
 
 
 private:
   /// Handle the next character of input.
-  boost::tribool& consume(Request& req, Buffer::iterator input);
+  boost::tribool& consume(Request& req, char *input);
 
   /// Check if a byte is an HTTP character.
   static bool is_char(int c);
@@ -77,17 +87,23 @@ private:
   /// Check if a byte is a digit.
   static bool is_digit(int c);
 
-  bool consumeChar(Buffer::iterator d);
+  bool consumeChar(char *d);
   void consumeToString(buffer_string& result, int maxSize);
-  void consumeComplete(Buffer::iterator d);
+  void consumeComplete(char *d);
 
   Request::State parseWebSocketMessage(Request& req, ReplyPtr reply,
-				       Buffer::iterator& begin,
-				       Buffer::iterator end);
+				       char *& begin,
+				       char *end);
 
   bool doWebSocketHandshake00(const Request& req);
   std::string doWebSocketHandshake13(const Request& req);
   bool parseCrazyWebSocketKey(const buffer_string& key, ::uint32_t& number);
+
+#ifdef WTHTTP_WITH_ZLIB
+  bool doWebSocketPerMessageDeflateNegotiation(const Request& req, std::string& compressHeader);
+  bool inflate(unsigned char* in, size_t size, unsigned char out[], bool& hasMore);
+  bool initInflate();
+#endif
 
   /// The current state of the request parser.
   enum http_state
@@ -130,6 +146,13 @@ private:
     ws13_payload
   } wsState_;
 
+
+#ifdef WTHTTP_WITH_ZLIB
+  z_stream zInState_;
+  bool inflateInitialized_;
+#endif
+  uint64_t read_;
+
   // used for ws00 frameType or ws13 opcode byte
   unsigned char wsFrameType_;
   unsigned char wsCount_;
@@ -147,6 +170,8 @@ private:
   buffer_string *currentString_;
   unsigned maxSize_;
   bool haveHeader_;
+
+  Server *server_;
 };
 
 } // namespace server

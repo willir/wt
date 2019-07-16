@@ -1,26 +1,29 @@
-#include <Wt/WComboBox>
-#include <Wt/WContainerWidget>
-#include <Wt/WLineEdit>
-#include <Wt/WString>
-#include <Wt/WTextArea>
+#include <Wt/WComboBox.h>
+#include <Wt/WContainerWidget.h>
+#include <Wt/WLineEdit.h>
+#include <Wt/WString.h>
+#include <Wt/WTextArea.h>
 
 SAMPLE_BEGIN(SizingBlock)
-Wt::WContainerWidget *container = new Wt::WContainerWidget();
+auto container = Wt::cpp14::make_unique<Wt::WContainerWidget>();
 
-Wt::WLineEdit *edit = new Wt::WLineEdit(container);
+Wt::WLineEdit *edit =
+    container->addWidget(Wt::cpp14::make_unique<Wt::WLineEdit>());
 edit->setStyleClass("input-block-level");
-edit->setEmptyText("This is a line edit with style class"
+edit->setPlaceholderText("This is a line edit with style class"
                    " .input-block-level applied to it.");
 
-Wt::WComboBox *combo = new Wt::WComboBox(container);
+Wt::WComboBox *combo =
+    container->addWidget(Wt::cpp14::make_unique<Wt::WComboBox>());
 combo->setStyleClass("input-block-level");
 for (int i=1; i<5; ++i)
     combo->addItem("Combo box with style class .input-block-level - item"
-                   + boost::lexical_cast<std::string>(i));
+                   + std::to_string(i));
 
-Wt::WTextArea *area = new Wt::WTextArea(container);
+Wt::WTextArea *area =
+    container->addWidget(Wt::cpp14::make_unique<Wt::WTextArea>());
 area->setStyleClass("input-block-level");
-area->setEmptyText("This is a text area with style class"
+area->setPlaceholderText("This is a text area with style class"
                    " .input-block-level applied to it.");
 
 SAMPLE_END(return container)

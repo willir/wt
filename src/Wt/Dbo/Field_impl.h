@@ -7,20 +7,21 @@
 #ifndef WT_DBO_FIELD_IMPL_H_
 #define WT_DBO_FIELD_IMPL_H_
 
-#include <Wt/Dbo/Session>
-#include <Wt/Dbo/Exception>
-#include <Wt/Dbo/SqlStatement>
-#include <Wt/Dbo/SqlTraits>
-#include <Wt/Dbo/DbAction>
+#include <Wt/Dbo/Session.h>
+#include <Wt/Dbo/Exception.h>
+#include <Wt/Dbo/SqlStatement.h>
+#include <Wt/Dbo/SqlTraits.h>
+#include <Wt/Dbo/DbAction.h>
 
 namespace Wt {
   namespace Dbo {
 
 template <typename V>
-FieldRef<V>::FieldRef(V& value, const std::string& name, int size)
+FieldRef<V>::FieldRef(V& value, const std::string& name, int size, int flags)
   : value_(value),
     name_(name),
-    size_(size)
+    size_(size),
+    flags_(flags)
 { }
 
 template <typename V>
@@ -33,6 +34,12 @@ template <typename V>
 int FieldRef<V>::size() const
 {
   return size_;
+}
+
+template <typename V>
+int FieldRef<V>::flags() const
+{
+  return flags_;
 }
 
 template <typename V>
@@ -54,7 +61,7 @@ void FieldRef<V>::bindValue(SqlStatement *statement, int column) const
 }
 
 template <typename V>
-void FieldRef<V>::setValue(Session& session, SqlStatement *statement,
+void FieldRef<V>::setValue(Session& /* session */, SqlStatement *statement,
 			   int column) const
 {
   sql_value_traits<V>::read(value_, statement, column, size_);
@@ -66,28 +73,43 @@ CollectionRef<C>::CollectionRef(collection< ptr<C> >& value,
 				const std::string& joinName,
 				const std::string& joinId,
 				int fkConstraints)
-  : value_(value), joinName_(joinName), joinId_(joinId), type_(type),
-    fkConstraints_(fkConstraints)
-{ }
+  : value_(value), joinName_(joinName), joinId_(joinId),
+    literalJoinId_(false),
+    type_(type), fkConstraints_(fkConstraints)
+{
+  if (type == ManyToOne && !joinName.empty() && joinName[0] == '>') {
+    joinName_ = std::string(joinName.c_str() + 1, joinName.size() - 1);
+  }
+  if (type == ManyToMany && !joinId.empty() && joinId[0] == '>') {
+    joinId_ = std::string(joinId.c_str() + 1, joinId.size() - 1);
+    literalJoinId_ = true;
+  }
+}
 
 template <class C>
-PtrRef<C>::PtrRef(ptr<C>& value, const std::string& name, int size,
-		  int fkConstraints)
+PtrRef<C>::PtrRef(ptr<C>& value, const std::string& name,
+		  int fkConstraints, int flags)
   : value_(value),
     name_(name),
-    size_(size),
-    fkConstraints_(fkConstraints)
-{ }
+    literalForeignKey_(false),
+    fkConstraints_(fkConstraints),
+    flags_(flags)
+{
+  if (!name.empty() && name[0] == '>') {
+    name_ = std::string(name.c_str() + 1, name.size() - 1);
+    literalForeignKey_ = true;
+  }
+}
 
 template <class C, class A, class Enable = void>
 struct LoadLazyHelper
 {
-  static void loadLazy(ptr<C>& p, typename dbo_traits<C>::IdType id,
-		       Session *session) { }
+  static void loadLazy(ptr<C>& /* p */, typename dbo_traits<C>::IdType /* id */,
+		       Session * /* session */) { }
 };
 
 template <class C, class A>
-struct LoadLazyHelper<C, A, typename boost::enable_if<action_sets_value<A> >::type>
+struct LoadLazyHelper<C, A, typename std::enable_if<action_sets_value<A>::value >::type>
 {
   static void loadLazy(ptr<C>& p, typename dbo_traits<C>::IdType id,
 		       Session *session) {
@@ -112,7 +134,7 @@ void PtrRef<C>::visit(A& action, Session *session) const
     id = value_.id();
 
   std::string idFieldName = "stub";
-  int size = size_;
+  int size = -1;
 
   if (session) {
     Impl::MappingInfo *mapping = session->getMapping<C>();
@@ -124,7 +146,11 @@ void PtrRef<C>::visit(A& action, Session *session) const
       idFieldName = mapping->surrogateIdFieldName;
   }
 
-  field(action, id, name_ + "_" + idFieldName, size);
+  if (literalForeignKey()) {
+    field(action, id, name_, size);
+  } else {
+    field(action, id, name_ + "_" + idFieldName, size);
+  }
 
   LoadLazyHelper<C, A>::loadLazy(value_, id, session);
 }
@@ -133,7 +159,11 @@ template <class C>
 WeakPtrRef<C>::WeakPtrRef(weak_ptr<C>& value, const std::string& joinName)
   : value_(value),
     joinName_(joinName)
-{ }
+{
+  if (!joinName.empty() && joinName[0] == '>') {
+    joinName_ = std::string(joinName.c_str() + 1, joinName.size() - 1);
+  }
+}
 
 template <class C>
 const std::type_info *PtrRef<C>::type() const
@@ -154,6 +184,20 @@ void id(A& action, ptr<C>& value, const std::string& name,
   action.actId(value, name, size, constraint.value());
 }
 
+template <class Action, typename V>
+void auxId(Action& action, V& value, const std::string& name,
+	   int size)
+{
+  action.act(FieldRef<V>(value, name, size, FieldRef<V>::AuxId));
+}
+
+template <class Action, class C>
+void auxId(Action& action, ptr<C>& value, const std::string& name,
+	   ForeignKeyConstraint constraint, int size)
+{
+  action.actPtr(PtrRef<C>(value, name, constraint.value(), PtrRef<C>::AuxId));
+}
+  
 template <class A, typename V>
 void field(A& action, V& value, const std::string& name, int size)
 {
@@ -161,40 +205,40 @@ void field(A& action, V& value, const std::string& name, int size)
 }
 
 template <class A, class C>
-void field(A& action, ptr<C>& value, const std::string& name, int size)
+void field(A& action, ptr<C>& value, const std::string& name, int)
 {
-  action.actPtr(PtrRef<C>(value, name, size, 0));
+  action.actPtr(PtrRef<C>(value, name, 0));
 }
 
 template <class A, class C>
 void belongsToImpl(A& action, ptr<C>& value, const std::string& name,
-		   int fkConstraints, int size)
+		   int fkConstraints)
 {
   if (name.empty() && action.session())
     action.actPtr(PtrRef<C>(value, action.session()->template tableName<C>(),
-			    size, fkConstraints));
+			    fkConstraints));
   else
-    action.actPtr(PtrRef<C>(value, name, size, fkConstraints));
+    action.actPtr(PtrRef<C>(value, name, fkConstraints));
 }
 
 template <class A, class C>
-void belongsTo(A& action, ptr<C>& value, const std::string& name, int size)
+void belongsTo(A& action, ptr<C>& value, const std::string& name)
 {
-  belongsToImpl(action, value, name, 0, size);
+  belongsToImpl(action, value, name, 0);
 }
 
 template <class A, class C>
 void belongsTo(A& action, ptr<C>& value, const std::string& name,
-	       ForeignKeyConstraint constraint, int size)
+	       ForeignKeyConstraint constraint)
 {
-  belongsToImpl(action, value, name, constraint.value(), size);
+  belongsToImpl(action, value, name, constraint.value());
 }
 
 template <class A, class C>
 void belongsTo(A& action, ptr<C>& value,
-	       ForeignKeyConstraint constraint, int size)
+	       ForeignKeyConstraint constraint)
 {
-  belongsToImpl(action, value, std::string(), constraint.value(), size);
+  belongsToImpl(action, value, std::string(), constraint.value());
 }
 
 template <class A, class C>

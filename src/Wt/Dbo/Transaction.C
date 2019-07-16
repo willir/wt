@@ -6,24 +6,30 @@
 
 #include <iostream>
 
-#include "Wt/Dbo/Transaction"
-#include "Wt/Dbo/SqlConnection"
-#include "Wt/Dbo/Session"
-#include "Wt/Dbo/ptr"
+#include "Wt/Dbo/Transaction.h"
+#include "Wt/Dbo/SqlConnection.h"
+#include "Wt/Dbo/Session.h"
+#include "Wt/Dbo/ptr.h"
 
 namespace Wt {
   namespace Dbo {
 
-Transaction::Transaction(Session& session, SelectType type)
+static bool hasUncaughtExceptions() {
+#if __cplusplus >= 201703L
+  return std::uncaught_exceptions() > 0;
+#else
+  return std::uncaught_exception();
+#endif
+}
+
+Transaction::Transaction(Session& session)
   : committed_(false),
     session_(session)
 { 
   if (!session_.transaction_)
-    session_.transaction_ = new Impl(session_, type);
+    session_.transaction_ = new Impl(session_);
 
   impl_ = session_.transaction_;
-  if (impl_->type_ < type)
-    impl_->type_ = type;
 
   ++impl_->transactionCount_;
 }
@@ -32,18 +38,18 @@ Transaction::Transaction(Session& session, SelectType type)
  * About noexcept(false), see
  * http://akrzemi1.wordpress.com/2011/09/21/destructors-that-throw/
  */
-Transaction::~Transaction() WT_CXX11ONLY(noexcept(false))
+Transaction::~Transaction() noexcept(false)
 {
   // Either this Transaction shell was not committed (first condition)
   // or the commit failed (we are still active and need to rollback)
   if (!committed_ || impl_->needsRollback_) {
     // A commit attempt failed (and thus we need to rollback) or we
     // are unwinding a stack while an exception is thrown
-    if (impl_->needsRollback_ || std::uncaught_exception()) {
-      bool canThrow = !std::uncaught_exception();
+    if (impl_->needsRollback_ || hasUncaughtExceptions()) {
+      bool canThrow = !hasUncaughtExceptions();
       try {
 	rollback();
-      } catch (std::exception&) {
+      } catch (...) {
 	release();
 	if (canThrow)
 	  throw;
@@ -51,12 +57,12 @@ Transaction::~Transaction() WT_CXX11ONLY(noexcept(false))
     } else {
       try {
 	commit();
-      } catch (std::exception&) {
+      } catch (...) {
 	try {
 	  if (impl_->transactionCount_ == 1)
 	    rollback();
-	} catch (std::exception&) {
-	  std::cerr << "Unexpected transaction during Transaction::rollback()"
+	} catch (...) {
+	  std::cerr << "Unexpected exception during Transaction::rollback()"
 		    << std::endl;
 	}
 
@@ -111,12 +117,11 @@ Session& Transaction::session() const
 SqlConnection *Transaction::connection() const
 {
   impl_->open();
-  return impl_->connection_;
+  return impl_->connection_.get();
 }
 
-Transaction::Impl::Impl(Session& session, Transaction::SelectType type)
+Transaction::Impl::Impl(Session& session)
   : session_(session),
-    type_(type),
     active_(true),
     needsRollback_(false),
     open_(false),
@@ -128,7 +133,7 @@ Transaction::Impl::Impl(Session& session, Transaction::SelectType type)
 Transaction::Impl::~Impl()
 {
   if (connection_)
-    session_.returnConnection(connection_);
+    session_.returnConnection(std::move(connection_));
 }
 
 void Transaction::Impl::open()
@@ -142,7 +147,7 @@ void Transaction::Impl::open()
 void Transaction::Impl::commit()
 {
   needsRollback_ = true;
-  if (session_.flushMode() == Auto)
+  if (session_.flushMode() == FlushMode::Auto)
     session_.flush();
 
   if (open_)
@@ -155,9 +160,8 @@ void Transaction::Impl::commit()
 
   objects_.clear();
 
-  session_.returnConnection(connection_);
-  connection_ = 0;
-  session_.transaction_ = 0;
+  session_.returnConnection(std::move(connection_));
+  session_.transaction_ = nullptr;
   active_ = false;
   needsRollback_ = false;
 }
@@ -182,21 +186,22 @@ void Transaction::Impl::rollback()
 
   removeAllDirtyObjects();  // TODO: Add option to reread all
 
-  session_.returnConnection(connection_);
-  connection_ = 0;
-  session_.transaction_ = 0;
+  session_.returnConnection(std::move(connection_));
+  session_.transaction_ = nullptr;
   active_ = false;
 }
 
 void Transaction::Impl::removeAllDirtyObjects() {
+#if 0
   session_.objectsToAdd_.clear();
 
-  while (!session_.dirtyObjects_.empty()) {
-    Session::MetaDboBaseSet::iterator i = session_.dirtyObjects_.begin();
+  while (!session_.dirtyObjects_->empty()) {
+    Session::MetaDboBaseSet::iterator i = session_.dirtyObjects_->begin();
     MetaDboBase *dbo = *i;
-    session_.dirtyObjects_.erase(i);
+    session_.dirtyObjects_->erase(i);
     dbo->decRef();
   }
+#endif
 }
 
   }

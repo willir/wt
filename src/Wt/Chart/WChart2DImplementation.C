@@ -4,10 +4,10 @@
  * See the LICENSE file for terms of use.
  */
 
-#include "Wt/Chart/WChart2DImplementation"
-#include "Wt/Chart/WCartesianChart"
-#include "Wt/WAbstractItemModel"
-#include "Wt/WPainter"
+#include "Wt/Chart/WChart2DImplementation.h"
+#include "Wt/Chart/WCartesianChart.h"
+#include "Wt/Chart/WAbstractChartModel.h"
+#include "Wt/WPainter.h"
 
 #include "WebUtils.h"
 
@@ -17,16 +17,16 @@ namespace Wt {
 bool ExtremesIterator::startSeries(const WDataSeries& series, double groupWidth,
 				   int numBarGroups, int currentBarGroup)
 {
-  return axis_ == XAxis || series.axis() == axis_;
+  return axis_ == Axis::X || series.yAxis() == yAxis_;
 }
 
 void ExtremesIterator::newValue(const WDataSeries& series, double x, double y,
-				double stackY, const WModelIndex& xIndex,
-				const WModelIndex& yIndex)
+				double stackY, int xRow, int xColumn,
+				int yRow, int yColumn)
 {
-  double v = axis_ == XAxis ? x : y;
+  double v = axis_ == Axis::X ? x : y;
   
-  if (!Utils::isNaN(v) && (scale_ != LogScale || v > 0.0)) {
+  if (!Utils::isNaN(v) && (scale_ != AxisScale::Log || v > 0.0)) {
     maximum_ = std::max(v, maximum_);
     minimum_ = std::min(v, minimum_);
   }
@@ -67,23 +67,31 @@ Orientation WChart2DImplementation::orientation() const
 WString WChart2DImplementation::categoryLabel(int u, Axis axis) const
 {
   if (chart_->XSeriesColumn() != -1) {
-    return asString(chart_->model()->data(u, chart_->XSeriesColumn()));
+    if (u < chart_->model()->rowCount())
+      return chart_->model()->displayData(u, chart_->XSeriesColumn());
+    else
+      return WString();
   } else {
     return WString();
   }
 }
 
-WChart2DImplementation::RenderRange WChart2DImplementation::computeRenderRange(Axis axis, AxisScale scale) const
+WChart2DImplementation::RenderRange WChart2DImplementation::computeRenderRange(Axis axis, int yAxis, AxisScale scale) const
 {
-  ExtremesIterator iterator(axis, scale);
+  ExtremesIterator iterator(axis, yAxis, scale);
   
-  chart_->iterateSeries(&iterator, 0);
+  chart_->iterateSeries(&iterator, nullptr, false, axis == Axis::X);
 
   RenderRange range;
   range.minimum = iterator.minimum();
   range.maximum = iterator.maximum();
 
   return range;
+}
+
+bool WChart2DImplementation::onDemandLoadingEnabled() const
+{
+  return chart_->onDemandLoadingEnabled();
 }
 
   }

@@ -8,7 +8,8 @@
 
 WT_DECLARE_WT_MEMBER
 (1, JavaScriptConstructor, "WDialog",
- function(APP, el, titlebar, centerX, centerY, movedSignal, resizedSignal) {
+ function(APP, el, titlebar, movable, centerX, centerY, movedSignal, resizedSignal, zIndexChangedSignal)
+ {
    jQuery.data(el, 'obj', this);
 
    var self = this;
@@ -17,6 +18,11 @@ WT_DECLARE_WT_MEMBER
    var dsx, dsy;
    var x=-1, y=-1, w=-1, h=-1;
    var resizeBusy = false;
+   // Percentage size before it was recomputed by layout manager. (if it was
+   // set in %)
+   var percentageWidth = -1, percentageHeight = -1;
+   var calculatedPercentageWidth = -1, calculatedPercentageHeight = -1;
+   var width = -1;
 
    function newPos() {
      if (movedSignal) {
@@ -31,11 +37,12 @@ WT_DECLARE_WT_MEMBER
    }
 
    function newSize(neww, newh) {
-     if (!resizeBusy && resizedSignal) {
+     if (!resizeBusy) {
        if (neww != w || newh != h) {
-	 w = neww;
-	 h = newh;
-	 APP.emit(el, resizedSignal, w, h);
+         w = neww;
+         h = newh;
+         if (resizedSignal)
+          APP.emit(el, resizedSignal, w, h);
        }
      }
    }
@@ -72,7 +79,7 @@ WT_DECLARE_WT_MEMBER
      }
    };
 
-   if (titlebar) {
+   if (titlebar && movable) {
      titlebar.onmousedown = function(event) {
        var e = event||window.event;
        WT.capture(titlebar);
@@ -93,14 +100,37 @@ WT_DECLARE_WT_MEMBER
    }
 
    this.centerDialog = function() {
+     var pctMaxWidth = WT.parsePct(WT.css(el, 'max-width'), 0);
+     var pctMaxHeight = WT.parsePct(WT.css(el, 'max-height'), 0);
+
+     if (pctMaxWidth !== 0) {
+       var ws = WT.windowSize();
+       
+       var layout = jQuery.data(layoutContainer.firstChild, 'layout');
+       if (layout && layout.setMaxSize) {
+	 layout.setMaxSize(ws.x * pctMaxWidth / 100,
+			   ws.y * pctMaxHeight / 100);
+       }
+     }
+
      if (el.parentNode == null) {
        el = titlebar = null;
        return;
      }
 
-     if ((el.style.display != 'none') && (el.style.visibility != 'hidden')) {
+     // FIXME: figure out the visibility story. The stdlayoutimpl sets
+     //        itself to visible, seemingly by accident? It seems like
+     //        a hack that centerDialog() causes the dialog to be visible?
+     if ((el.style.display != 'none')/* && (el.style.visibility != 'hidden')*/) {
        var ws = WT.windowSize();
        var w = el.offsetWidth, h = el.offsetHeight;
+       if (percentageWidth != -1) {
+         centerX = true;
+       }
+
+       if (percentageHeight != -1) {
+         centerY = true;
+       }
 
        if (centerX) {
 	 el.style.left = Math.round((ws.x - w)/2
@@ -118,43 +148,94 @@ WT_DECLARE_WT_MEMBER
 	 el.style.visibility = 'visible';
        }
 
-       newPos();
+        newPos();
      }
    };
 
-   function layoutResize(ignored, w, h) {
+   /*
+    * The dialog layout manager resizes the dialog
+    */
+   function layoutResize(ignored, w, h, setSize) {
      if (el.style.position == '') {
        el.style.position = WT.isIE6 ? 'absolute' : 'fixed';
      }
 
      el.style.visibility = 'visible';
 
-     el.style.height = Math.max(0, h) + 'px';
-     el.style.width = Math.max(0, w) + 'px';
+     var ws = WT.windowSize();
+
+     percentageHeight = WT.parsePct(el.style.height, percentageHeight);
+     percentageWidth = WT.parsePct(el.style.width, percentageWidth);
+
+     if (setSize) {
+       el.style.height = Math.max(0, h) + 'px';
+       el.style.width = Math.max(0, w) + 'px';
+     }
 
      newSize(w, h);
 
      self.centerDialog();
+
+     var precentWidthChanged = percentageWidth != -1;
+
+     var precentHeightChanged = percentageHeight != -1;
+
+     if (precentWidthChanged && precentHeightChanged) {
+       calculatedPercentageWidth = percentageWidthInPx();
+       calculatedPercentageHeight = percentageHeightInPx();
+       self.onresize(calculatedPercentageWidth,
+                     calculatedPercentageHeight, true);
+     } else if (precentWidthChanged) {
+       calculatedPercentageWidth = percentageWidthInPx();
+       self.onresize(calculatedPercentageWidth, h, true);
+     } else if (precentHeightChanged) {
+       calculatedPercentageHeight = percentageHeightInPx();
+       self.onresize(w, calculatedPercentageHeight, true);
+     }
    }
 
-   function wtResize(ignored, w, h) {
-     if (w > 0)
-       layoutContainer.style.width = w +
+   function percentageWidthInPx() {
+     var ws = WT.windowSize();
+     return (ws.x * percentageWidth / 100);
+   }
+
+   function percentageHeightInPx() {
+     var ws = WT.windowSize();
+     return (ws.y * percentageHeight / 100);
+   }
+
+   /*
+    * C++ dialog.resize() was called
+    */
+   function wtResize(ignored, w, h, setSize) {
+     if (setSize) {
+       if (w > 0)
+	 layoutContainer.style.width = w +
            WT.parsePx($(layoutContainer).css('borderLeftWidth')) +
            WT.parsePx($(layoutContainer).css('borderRightWidth')) + 'px';
-     if (h > 0)
-       layoutContainer.style.height = h +
+       if (h > 0)
+	 layoutContainer.style.height = h +
            WT.parsePx($(layoutContainer).css('borderTopWidth')) +
            WT.parsePx($(layoutContainer).css('borderBottomWidth')) + 'px';
+     }
 
      self.centerDialog();
 
      if (el.wtResize)
-       el.wtResize(el, w, h);
+       el.wtResize(el, w, h, true);
    };
 
    function wtPosition() {
-     APP.layouts2.adjust();
+     // if the WTreeView is rendered using StdGridLayoutImpl2,
+     // the call to wtResize() is not necessary, because APP.layouts2.adjust()
+     // already does that. It doesn't hurt, though.
+     self.centerDialog();
+     if (APP.layouts2) {
+       // This is for StdGridLayoutImpl2,
+       // will call self.centerDialog() as
+       // part of its implementation
+       APP.layouts2.adjust();
+     }
    }
 
    this.bringToFront = function() {
@@ -166,20 +247,28 @@ WT_DECLARE_WT_MEMBER
        }
      );
 
-     if (maxz > el.style['zIndex'])
-       el.style['zIndex'] = maxz + 1;
+     if (maxz > el.style['zIndex']) {
+       var newZIndex = maxz + 1;
+       el.style['zIndex'] = newZIndex;
+       APP.emit(el, zIndexChangedSignal, newZIndex);
+     }
    };
 
+   /*
+    * The user resizes the dialog using the resize handle
+    */
    this.onresize = function(w, h, done) {
      centerX = centerY = false;
 
      resizeBusy = !done;
-     wtResize(el, w, h);
+     wtResize(el, w, h, true);
 
      var layout = jQuery.data(layoutContainer.firstChild, 'layout');
-     layout.setMaxSize(0, 0);
+     if (layout && layout.setMaxSize)
+        layout.setMaxSize(0, 0);
 
-     APP.layouts2.scheduleAdjust();
+     if (APP.layouts2)
+       APP.layouts2.scheduleAdjust();
 
      if (done)
        newSize(w, h);

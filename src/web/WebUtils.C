@@ -7,17 +7,18 @@
 #include "WebUtils.h"
 #include "DomElement.h"
 #include "3rdparty/rapidxml/rapidxml.hpp"
-#include "Wt/WException"
-#include "Wt/WString"
-#include "Wt/Utils"
+#include "Wt/WException.h"
+#include "Wt/WString.h"
+#include "Wt/Utils.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/version.hpp>
-#include <boost/scoped_array.hpp>
 
 #include <ctype.h>
 #include <stdio.h>
 #include <fstream>
+#include <iomanip>
+#include <cfloat>
 
 #ifdef WT_WIN32
 #include <windows.h>
@@ -37,6 +38,9 @@
 #include <boost/math/special_functions/fpclassify.hpp>
 #include <boost/math/special_functions/sign.hpp>
 #endif // SPIRIT_FLOAT_FORMAT
+
+#include <boost/spirit/include/qi_parse.hpp>
+#include <boost/spirit/include/qi_numeric.hpp>
 
 // Qnx gcc 4.4.2
 #ifdef isnan
@@ -254,10 +258,19 @@ static inline char *generic_double_to_str(double d, int precision, char *buf)
   using namespace boost::spirit::karma;
   char *p = buf;
   if (d != 0) {
-    if (precision <= 7)
-      generate(p, KarmaJavaScriptReal(), d);
-    else
-      generate(p, KarmaJavaScriptDouble(), d);
+      if (fabs(d) < DBL_MIN) {
+        std::stringstream ss;
+        ss.imbue(std::locale("C"));
+        ss << std::setprecision(precision) << d;
+        std::string str = ss.str();
+        memcpy(p, str.c_str(), str.length());
+        p += str.length();
+      } else {
+        if (precision <= 7)
+          generate(p, KarmaJavaScriptReal(), d);
+        else
+          generate(p, KarmaJavaScriptDouble(), d);
+      }
   }  else
     *p++ = '0';
   *p = '\0';
@@ -366,15 +379,6 @@ void inplaceUrlDecode(std::string &text)
   text.erase(j);
 }
 
-void split(SplitSet& tokens, const std::string &in, const char *sep,
-	   bool compress_adjacent_tokens)
-{
-    boost::split(tokens, in, boost::is_any_of(sep),
-		 compress_adjacent_tokens?
-		 boost::algorithm::token_compress_on:
-		 boost::algorithm::token_compress_off);
-}
-
 std::string EncodeHttpHeaderField(const std::string &fieldname,
                                   const WString &fieldValue)
 {
@@ -393,7 +397,7 @@ std::string readFile(const std::string& fname)
   int length = f.tellg();
   f.seekg(0, std::ios::beg);
   
-  boost::scoped_array<char> ftext(new char[length + 1]);
+  std::unique_ptr<char[]> ftext(new char[length + 1]);
   f.read(ftext.get(), length);
   ftext[length] = 0;
 
@@ -415,17 +419,58 @@ WString formatFloat(const WString &format, double value)
   delete[] buf;
 
   return result;
-
 }
 
-std::string splitEntryToString(SplitEntry se)
+template<typename ResultType, typename SpiritType>
+ResultType convert(const char *fname, const SpiritType &t, const std::string& v)
 {
-#ifndef WT_TARGET_JAVA
-  return std::string(se.begin(), se.end());
-#else
-  return se;
-#endif
+  auto is_space = [](char c) { return c == ' '; };
+  auto it = std::find_if_not(v.cbegin(), v.cend(), is_space);
+  ResultType result{0};
+  bool success =
+      it < v.cend() &&
+      boost::spirit::qi::parse(it, v.cend(), t, result) &&
+      std::all_of(it, v.cend(), is_space);
+  if (!success)
+    throw std::invalid_argument(std::string(fname) + "() of " + v + " failed");
+  return result;
 }
-  
+
+long stol(const std::string& v)
+{
+  return convert<long>("stol", boost::spirit::long_, v);
+}
+
+unsigned long stoul(const std::string& v)
+{
+  return convert<unsigned long>("stoul", boost::spirit::ulong_, v);
+}
+
+long long stoll(const std::string& v)
+{
+  return convert<long long>("stoll", boost::spirit::long_long, v);
+}
+
+unsigned long long stoull(const std::string& v)
+{
+  return convert<unsigned long long>("stoull", boost::spirit::ulong_long, v);
+}
+
+int stoi(const std::string& v)
+{
+  return convert<int>("stoi", boost::spirit::int_, v);
+}
+
+double stod(const std::string& v)
+{
+  return convert<double>("stod", boost::spirit::double_, v);
+}
+
+float stof(const std::string& v)
+{
+  return convert<float>("stof", boost::spirit::float_, v);
+}
+
+
   }
 }

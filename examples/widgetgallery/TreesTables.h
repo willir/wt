@@ -19,16 +19,16 @@ public:
 
 private:
   Wt::WLineEdit *regexpFilter;
-  Wt::WSortFilterProxyModel *filteredCocktails;
-  Wt::WSortFilterProxyModel *filteredSortedCocktails;
+  std::shared_ptr<Wt::WSortFilterProxyModel> filteredCocktails;
+  std::shared_ptr<Wt::WSortFilterProxyModel> filteredSortedCocktails;
 
-  Wt::WWidget *tables();
-  Wt::WWidget *trees();
-  Wt::WWidget *treeTables();
-  Wt::WWidget *tableViews();
-  Wt::WWidget *treeViews();
-  Wt::WWidget *itemModels();
-  Wt::WWidget *proxyModels();
+  std::unique_ptr<Wt::WWidget> tables();
+  std::unique_ptr<Wt::WWidget> trees();
+  std::unique_ptr<Wt::WWidget> treeTables();
+  std::unique_ptr<Wt::WWidget> tableViews();
+  std::unique_ptr<Wt::WWidget> treeViews();
+  std::unique_ptr<Wt::WWidget> itemModels();
+  std::unique_ptr<Wt::WWidget> proxyModels();
 
   Wt::WStringListModel *stringList_;
 

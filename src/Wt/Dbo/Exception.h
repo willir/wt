@@ -1,0 +1,173 @@
+// This may look like C code, but it's really -*- C++ -*-
+/*
+ * Copyright (C) 2008 Emweb bvba, Kessel-Lo, Belgium.
+ *
+ * See the LICENSE file for terms of use.
+ */
+#ifndef WT_DBO_EXCEPTION_H_
+#define WT_DBO_EXCEPTION_H_
+
+#include <string>
+#include <stdexcept>
+#include <Wt/Dbo/WDboDllDefs.h>
+
+namespace Wt {
+  namespace Dbo {
+
+extern WTDBO_API std::string backtrace();
+
+/*! \class Exception Wt/Dbo/Exception.h Wt/Dbo/Exception.h
+ *  \brief %Exception base class for %Wt::%Dbo.
+ *
+ * \ingroup dbo
+ */
+class WTDBO_API Exception : public std::runtime_error
+{
+public:
+  /*! \brief Constructor.
+   */
+  Exception(const std::string& error, const std::string& code = std::string());
+
+  virtual ~Exception() throw();
+
+  /*! \brief A (backend-specific) error code.
+   *
+   * For native SQL errors, a native backend code may be available
+   * (see the backend documentation for details). This is typically
+   * the (semi-standardized) SQLSTATE code value.
+   *
+   * When not available, an empty string is returned.
+   */
+  std::string code() const { return code_; }
+
+private:
+  std::string code_;
+};
+
+/*! \brief Caller should try to just execture this transaction one more time.
+ */
+class WTDBO_API RetriableException : public Exception {
+public:
+  RetriableException(const std::string& error, const std::string& code = std::string());
+};
+
+/*! \brief There is no reason to try to execute this transaction one more time. It will fail in same way.
+ */
+class WTDBO_API NonRetriableException : public Exception {
+public:
+    NonRetriableException(const std::string& error, const std::string& code = std::string());
+};
+
+/*! \class StaleObjectException Wt/Dbo/Exception.h Wt/Dbo/Exception.h
+ *  \brief %Exception thrown when %Wt::%Dbo detects a concurrent modification
+ *
+ * %Wt::%Dbo uses optimistic locking for detecting and preventing
+ * concurrent modification of database objects. When trying to save an
+ * object that has been modified concurrently by another session, since
+ * it was read from the database, this exception is thrown.
+ *
+ * This exception is thrown during flushing from Session::flush() or
+ * ptr::flush(). Since flushing will also be done automatically when
+ * needed (e.g. before running a query or before committing a
+ * transaction), you should be prepared to catch this exception from most
+ * library API calls.
+ *
+ * \note We should perhaps also have a ptr::isStale() method to find out
+ *       what database object is stale ?
+ *
+ * \ingroup dbo
+ */
+class WTDBO_API StaleObjectException : public RetriableException
+{
+public:
+  /*! \brief Constructor.
+   */
+  StaleObjectException(const std::string& id, const char *table, int version);
+};
+
+class WTDBO_API DeadLockException : public RetriableException
+{
+public:
+  /*! \brief Constructor.
+   */
+  DeadLockException(const std::string& error, const std::string& code);
+};
+
+class WTDBO_API SerializationFailureException : public RetriableException
+{
+public:
+  /*! \brief Constructor.
+   */
+  SerializationFailureException(const std::string& error, const std::string& code);
+};
+
+class WTDBO_API ViolationException : public NonRetriableException
+{
+public:
+  ViolationException(const std::string& error, const std::string& code);
+  ViolationException(const std::string &name, const std::string& error, const std::string& code);
+};
+
+class WTDBO_API UniqViolationException : public ViolationException
+{
+public:
+  UniqViolationException(const std::string& error, const std::string& code);
+};
+
+class WTDBO_API ForeignKeyViolationException : public ViolationException
+{
+public:
+  ForeignKeyViolationException(const std::string& error, const std::string& code);
+};
+
+/*! \class ConnectionDbFailureException
+ *  \brief %Exception thrown when connection to db failure is happened.
+ *
+ * \ingroup dbo
+ */
+class WTDBO_API ConnectionDbFailureException : public NonRetriableException
+{
+public:
+  /*! \brief Constructor.
+   */
+  ConnectionDbFailureException(const std::string& error);
+};
+
+/*! \class ObjectNotFoundException Wt/Dbo/Exception.h Wt/Dbo/Exception.h
+ *  \brief %Exception thrown when trying to load a non-existing object.
+ *
+ * This %Exception is thrown by Session::load() when trying to load an object
+ * that does not exist.
+ *
+ * \ingroup dbo
+ */
+class WTDBO_API ObjectNotFoundException : public NonRetriableException
+{
+public:
+  /*! \brief Constructor.
+   */
+  ObjectNotFoundException(const char *table, const std::string& id);
+};
+
+/*! \class NoUniqueResultException Wt/Dbo/Exception.h Wt/Dbo/Exception.h
+ *  \brief %Exception thrown when a query unexpectedly finds a non-unique result.
+ *
+ * This %Exception is thrown by Query::resultValue() when the query has
+ * more than one result.
+ *
+ * \ingroup dbo
+ */
+class WTDBO_API NoUniqueResultException : public NonRetriableException
+{
+public:
+  /*! \brief Constructor.
+   */
+  NoUniqueResultException();
+};
+
+
+
+  }
+}
+
+#endif // WT_DBO_EXCEPTION_H_

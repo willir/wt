@@ -3,10 +3,10 @@
  *
  * See the LICENSE file for terms of use.
  */
-#include "Wt/WApplication"
-#include "Wt/WEnvironment"
-#include "Wt/WTimerWidget"
-#include "Wt/WTimer"
+#include "Wt/WApplication.h"
+#include "Wt/WEnvironment.h"
+#include "Wt/WTimerWidget.h"
+#include "Wt/WTimer.h"
 #include "DomElement.h"
 
 namespace Wt {
@@ -18,7 +18,7 @@ WTimerWidget::WTimerWidget(WTimer *timer)
 
 WTimerWidget::~WTimerWidget()
 {
-  timer_->timerWidget_ = 0;
+  timer_->timerWidget_ = nullptr;
 }
 
 std::string WTimerWidget::renderRemoveJs(bool recursive)
@@ -59,7 +59,10 @@ void WTimerWidget::updateDom(DomElement& element, bool all)
   if (timerStarted_
       || ((!WApplication::instance()->environment().javaScript() || all)
 	  && timer_->isActive())) {
-    element.setTimeout(timer_->getRemainingInterval(), jsRepeat_);
+    if (jsRepeat_)
+      element.setTimeout(timer_->getRemainingInterval(), static_cast<int>(timer_->interval().count()));
+    else
+      element.setTimeout(timer_->getRemainingInterval(), false);
 
     timerStarted_ = false;
   }
@@ -69,7 +72,7 @@ void WTimerWidget::updateDom(DomElement& element, bool all)
 
 DomElementType WTimerWidget::domElementType() const
 {
-  return DomElement_SPAN;
+  return DomElementType::SPAN;
 }
 
 }

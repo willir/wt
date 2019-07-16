@@ -48,10 +48,10 @@ struct buffer_string
   unsigned int len;
   buffer_string *next;
 
-  buffer_string() : data(0), len(0), next(0) { }
+  buffer_string() : data(nullptr), len(0), next(nullptr) { }
 
   bool empty() const { return len == 0 && (!next || next->empty()); }
-  void clear() { data = 0; len = 0; next = 0; }
+  void clear() { data = nullptr; len = 0; next = nullptr; }
   std::string str() const;
   unsigned length() const;
   bool contains(const char *s) const;
@@ -76,11 +76,21 @@ public:
     buffer_string name;
     buffer_string value;
   };
+  
+#ifdef WTHTTP_WITH_ZLIB
+  struct PerMessageDeflateState {
+	bool enabled;
+	int client_max_window_bits; // -1 means no context takeover
+	int server_max_window_bits; // -1 means no context takeover
+  };
+#endif
 
   Request() {
 #ifdef HTTP_WITH_SSL
-    ssl = 0;
+    ssl = nullptr;
 #endif
+    http_version_major = -1;
+    http_version_minor = -1;
   }
   enum State { Partial, Complete, Error };
 
@@ -96,6 +106,9 @@ public:
   HeaderList headers;
   ::int64_t contentLength;
   int webSocketVersion;
+#ifdef WTHTTP_WITH_ZLIB
+  mutable PerMessageDeflateState pmdState_;
+#endif
 
   enum Type {
     HTTP, // HTTP request
@@ -106,6 +119,8 @@ public:
   std::string request_path;
   std::string request_query;
   std::string request_extra_path;
+
+  std::vector<std::pair<std::string, std::string> > url_params;
 
 #ifdef HTTP_WITH_SSL
   SSL *ssl;

@@ -12,6 +12,7 @@ WT_DECLARE_WT_MEMBER
    jQuery.data(el, 'obj', this);
 
    var lastW, lastH;
+   var badHeightCount = 0;
 
    var self = this,
        WT = APP.WT,
@@ -37,7 +38,7 @@ WT_DECLARE_WT_MEMBER
 		 });
 	   }
      }
-     APP.emit(el, 'render');
+     setTimeout(function() {APP.emit(el, 'render');}, 0);
    };
 
    this.init = function() {
@@ -67,9 +68,9 @@ WT_DECLARE_WT_MEMBER
      topLevel.wtResize = el.wtResize;
 
      if (WT.isGecko)
-       setTimeout(function() { self.wtResize(el, lastW, lastH); }, 100);
+       setTimeout(function() { self.wtResize(el, lastW, lastH, true); }, 100);
      else
-       self.wtResize(el, lastW, lastH);
+       self.wtResize(el, lastW, lastH, true);
 
      var doc;
 
@@ -106,7 +107,7 @@ WT_DECLARE_WT_MEMBER
        });
    };
 
-   this.wtResize = function(e, w, h) {
+   this.wtResize = function(e, w, h, setSize) {
      if (h < 0)
        return;
 
@@ -172,8 +173,15 @@ WT_DECLARE_WT_MEMBER
 	 h -= 1;
        }
 
-       if (h < 0)
+       if (h < 0) {
+	 if (badHeightCount < 10) {
+	   var timeoutDelay = Math.pow(2, badHeightCount) * 100;
+	   setTimeout(function() { self.wtResize(el, lastW, lastH, true); },
+		      timeoutDelay);
+	 }
+	 badHeightCount += 1;
 	 return;
+       }
 
        h = h + 'px';
 
@@ -195,6 +203,7 @@ WT_DECLARE_WT_MEMBER
        }
 
        if (iframe.style.height != h) {
+	 badHeightCount = 0;
 	 iframe.style.height = h;
 	 if (APP.layouts2)
 	   APP.layouts2.setElementDirty(el);

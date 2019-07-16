@@ -4,14 +4,7 @@
  * All rights reserved.
  */
 
-#include <boost/lexical_cast.hpp>
-#include <boost/pointer_cast.hpp>
-
-// work-around for:
-// http://groups.google.com/group/boost-list/browse_thread/thread/8eb0cc99bcda9d41?fwc=2&pli=1
-#include <boost/asio.hpp>
-
-#include "Wt/WServer"
+#include "Wt/WServer.h"
 #include "WtReply.h"
 #include "StockReply.h"
 #include "HTTPRequest.h"
@@ -33,7 +26,12 @@ namespace misc_strings {
   const char char0x0 = 0x0;
   const char char0xFF = (char)0xFF;
   const char char0x81 = (char)0x81;
+  const char char0xC1 = (char)0xC1;
 }
+
+#ifdef WTHTTP_WITH_ZLIB
+static int SERVER_MAX_WINDOW_BITS = 15;
+#endif
 
 WtReply::WtReply(Request& request, const Wt::EntryPoint& entryPoint,
                  const Configuration &config)
@@ -46,7 +44,10 @@ WtReply::WtReply(Request& request, const Wt::EntryPoint& entryPoint,
     contentLength_(-1),
     bodyReceived_(0),
     sendingMessages_(false),
-    httpRequest_(0)
+    httpRequest_(nullptr)
+#ifdef WTHTTP_WITH_ZLIB
+    ,deflateInitialized_(false)
+#endif
 {
   reset(&entryPoint);
 }
@@ -62,6 +63,11 @@ WtReply::~WtReply()
 
   if (!requestFileName_.empty())
     unlink(requestFileName_.c_str());
+
+#ifdef WTHTTP_WITH_ZLIB
+  if(deflateInitialized_)
+	deflateEnd(&zOutState_);
+#endif
 }
 
 void WtReply::reset(const Wt::EntryPoint *ep)
@@ -81,11 +87,11 @@ void WtReply::reset(const Wt::EntryPoint *ep)
   bodyReceived_ = 0;
   sendingMessages_ = false;
 
-  fetchMoreDataCallback_ = 0;
-  readMessageCallback_ = 0;
+  fetchMoreDataCallback_ = nullptr;
+  readMessageCallback_ = nullptr;
 
   if (httpRequest_)
-    httpRequest_->reset(boost::dynamic_pointer_cast<WtReply>
+    httpRequest_->reset(std::static_pointer_cast<WtReply>
 			(shared_from_this()), ep);
 
   if (&in_mem_ != in_) {
@@ -111,6 +117,10 @@ void WtReply::reset(const Wt::EntryPoint *ep)
   } else {
     in_ = &in_mem_;
   }
+#ifdef WTHTTP_WITH_ZLIB
+  if(deflateInitialized_)
+	deflateReset(&zOutState_);
+#endif
 }
 
 void WtReply::logReply(Wt::WLogger& logger)
@@ -121,16 +131,16 @@ void WtReply::logReply(Wt::WLogger& logger)
     httpRequest_->log();
 }
 
-bool WtReply::consumeData(Buffer::const_iterator begin,
-			  Buffer::const_iterator end,
+bool WtReply::consumeData(const char *begin,
+			  const char *end,
 			  Request::State state)
 {
   consumeRequestBody(begin, end, state);
   return true;
 }
 
-void WtReply::consumeRequestBody(Buffer::const_iterator begin,
-				 Buffer::const_iterator end,
+void WtReply::consumeRequestBody(const char *begin,
+				 const char *end,
 				 Request::State state)
 {
   if (request().type != Request::WebSocket) {
@@ -154,7 +164,7 @@ void WtReply::consumeRequestBody(Buffer::const_iterator begin,
             state = Request::Error;
           }
         }
-	in_->write(begin, static_cast<std::streamsize>(end - begin));
+	in_->write(&*begin, static_cast<std::streamsize>(end - begin));
         if (f_in) {
           f_in->close();
         }
@@ -164,7 +174,7 @@ void WtReply::consumeRequestBody(Buffer::const_iterator begin,
        * the web application is interested in knowing upload progress
        */
       if (!httpRequest_)
-	httpRequest_ = new HTTPRequest(boost::dynamic_pointer_cast<WtReply>
+	httpRequest_ = new HTTPRequest(std::static_pointer_cast<WtReply>
 				       (shared_from_this()), entryPoint_);
 
       if (end - begin > 0) {
@@ -173,7 +183,7 @@ void WtReply::consumeRequestBody(Buffer::const_iterator begin,
 	if (!connection()->server()->controller()->requestDataReceived
 	    (httpRequest_, bodyReceived_, request().contentLength)) {
 	  delete httpRequest_;
-	  httpRequest_ = 0;
+	  httpRequest_ = nullptr;
 
 	  setStatus(request_entity_too_large);
 	  setCloseConnection();
@@ -182,7 +192,7 @@ void WtReply::consumeRequestBody(Buffer::const_iterator begin,
       }
     } else {
       delete httpRequest_;
-      httpRequest_ = 0;
+      httpRequest_ = nullptr;
     }
 
     if (state == Request::Error) {
@@ -210,6 +220,10 @@ void WtReply::consumeRequestBody(Buffer::const_iterator begin,
         }
 
 	in_->seekg(0); // rewind
+#ifdef  __OpenBSD__
+        // openbsd sets error flag after calling seekg(0) on file stream
+        in_->clear();
+#endif
 
 	// Note: this is being posted because we want to release the strand
 	// we currently hold; we need to do that because otherwise the strand
@@ -229,9 +243,9 @@ void WtReply::consumeRequestBody(Buffer::const_iterator begin,
 	  connection()->server()->controller()->handleRequest(httpRequest_);
 	else
 	  connection()->server()->service().post
-	    (boost::bind(&Wt::WebController::handleRequest,
-			 connection()->server()->controller(),
-			 httpRequest_));
+	    (std::bind(&Wt::WebController::handleRequest,
+		       connection()->server()->controller(),
+		       httpRequest_));
       }
     }
   } else {
@@ -270,12 +284,12 @@ void WtReply::consumeRequestBody(Buffer::const_iterator begin,
        * We already create the HTTP request because waitMoreData() depends
        * on it.
        */
-      httpRequest_ = new HTTPRequest(boost::dynamic_pointer_cast<WtReply>
+      httpRequest_ = new HTTPRequest(std::static_pointer_cast<WtReply>
                                      (shared_from_this()), entryPoint_);
       httpRequest_->setWebSocketRequest(true);
       
       fetchMoreDataCallback_
-	= boost::bind(&WtReply::readRestWebSocketHandshake, this);
+	= std::bind(&WtReply::readRestWebSocketHandshake, this);
 
       LOG_DEBUG("ws: sending 101, deferring handshake");
 
@@ -289,7 +303,7 @@ void WtReply::consumeRequestBody(Buffer::const_iterator begin,
       in_mem_.write(begin, static_cast<std::streamsize>(end - begin));
 
       if (!httpRequest_) {
-	httpRequest_ = new HTTPRequest(boost::dynamic_pointer_cast<WtReply>
+	httpRequest_ = new HTTPRequest(std::static_pointer_cast<WtReply>
 				       (shared_from_this()), entryPoint_);
 	httpRequest_->setWebSocketRequest(true);
       }
@@ -306,8 +320,8 @@ void WtReply::readRestWebSocketHandshake()
 }
 
 void WtReply::consumeWebSocketMessage(ws_opcode opcode,
-				      Buffer::const_iterator begin,
-				      Buffer::const_iterator end,
+				      const char* begin,
+				      const char* end,
 				      Request::State state)
 {
   in_mem_.write(begin, static_cast<std::streamsize>(end - begin));
@@ -319,12 +333,12 @@ void WtReply::consumeWebSocketMessage(ws_opcode opcode,
       in_mem_.clear();
 
       Wt::WebRequest::ReadCallback cb = readMessageCallback_;
-      readMessageCallback_ = 0;
+      readMessageCallback_ = nullptr;
 
       // We need to post since in Wt we may be entering a recursive event
       // loop and we need to release the strand
       connection()->server()->service().post
-	(boost::bind(cb, Wt::ReadError));
+	(std::bind(cb, Wt::WebReadEvent::Error));
     } else
       in_mem_.seekg(0);
 
@@ -348,12 +362,12 @@ void WtReply::consumeWebSocketMessage(ws_opcode opcode,
 	 *  continuation frames in that case)
 	 */
 	Wt::WebRequest::ReadCallback cb = readMessageCallback_;
-	readMessageCallback_ = 0;
+	readMessageCallback_ = nullptr;
 
 	// We need to post since in Wt we may be entering a recursive event
 	// loop and we need to release the strand
 	connection()->server()->service().post
-	  (boost::bind(cb, Wt::ReadMessage));
+	  (std::bind(cb, Wt::WebReadEvent::Message));
 
 	break;
       }
@@ -362,12 +376,12 @@ void WtReply::consumeWebSocketMessage(ws_opcode opcode,
 	LOG_DEBUG("WtReply::consumeWebSocketMessage(): rx ping");
 
 	Wt::WebRequest::ReadCallback cb = readMessageCallback_;
-	readMessageCallback_ = 0;
+	readMessageCallback_ = nullptr;
 
 	// We need to post since in Wt we may be entering a recursive event
 	// loop and we need to release the strand
 	connection()->server()->service().post
-	  (boost::bind(cb, Wt::ReadPing));
+	  (std::bind(cb, Wt::WebReadEvent::Ping));
 
 	break;
       }
@@ -385,7 +399,7 @@ void WtReply::consumeWebSocketMessage(ws_opcode opcode,
 	 * same read callback
 	 */
 	Wt::WebRequest::ReadCallback cb = readMessageCallback_;
-	readMessageCallback_ = 0;
+	readMessageCallback_ = nullptr;
 	readWebSocketMessage(cb);
       }
 
@@ -424,8 +438,8 @@ void WtReply::writeDone(bool success)
 
   if (fetchMoreDataCallback_) {
     Wt::WebRequest::WriteCallback f = fetchMoreDataCallback_;
-    fetchMoreDataCallback_ = 0;
-    f(success ? Wt::WriteCompleted : Wt::WriteError);
+    fetchMoreDataCallback_ = nullptr;
+    f(success ? Wt::WebWriteEvent::Completed :  Wt::WebWriteEvent::Error);
   }
 }
 
@@ -453,8 +467,8 @@ void WtReply::send(const Wt::WebRequest::WriteCallback& callBack,
       LOG_DEBUG("Invoking callback (no status)");
 
       Wt::WebRequest::WriteCallback f = fetchMoreDataCallback_;
-      fetchMoreDataCallback_ = 0;
-      f(Wt::WriteCompleted);
+      fetchMoreDataCallback_ = nullptr;
+      f(Wt::WebWriteEvent::Completed);
 
       return;
     } else {
@@ -470,9 +484,6 @@ void WtReply::send(const Wt::WebRequest::WriteCallback& callBack,
 
 void WtReply::readWebSocketMessage(const Wt::WebRequest::ReadCallback& callBack)
 {
-  LOG_DEBUG("readWebSocketMessage(): " << readMessageCallback_
-	    << ", " << callBack);
-
   assert(request().type == Request::WebSocket);
 
   if (readMessageCallback_)
@@ -489,9 +500,9 @@ void WtReply::readWebSocketMessage(const Wt::WebRequest::ReadCallback& callBack)
   in_mem_.str("");
   in_mem_.clear();
 
-  connection()->strand().post(boost::bind(&Connection::handleReadBody,
-					  connection(),
-					  shared_from_this()));
+  connection()->strand().post(std::bind(&Connection::handleReadBody,
+					connection(),
+					shared_from_this()));
 }
 
 bool WtReply::readAvailable()
@@ -521,6 +532,7 @@ void WtReply::formatResponse(std::vector<asio::const_buffer>& result)
   bool webSocket = request().type == Request::WebSocket;
   if (webSocket) {
     std::size_t size = sending_;
+	std::vector<asio::const_buffer> buffers;
 
     LOG_DEBUG("ws: sending a message, length = " << size);
 
@@ -535,9 +547,45 @@ void WtReply::formatResponse(std::vector<asio::const_buffer>& result)
     case 8:
     case 13:
       {
-	result.push_back(asio::buffer(&misc_strings::char0x81, 1));
+	std::size_t payloadLength;
+#ifdef WTHTTP_WITH_ZLIB
+	if(!request_.pmdState_.enabled ) {
+#endif
+	  result.push_back(asio::buffer(&misc_strings::char0x81, 1)); // RSV1 = 0
+	  payloadLength = size;
+#ifdef WTHTTP_WITH_ZLIB
+	} else  {
+	  result.push_back(asio::buffer(&misc_strings::char0xC1, 1)); // RSV1 = 1
+	  const unsigned char* data = asio::buffer_cast<const unsigned char*>(out_buf_.data());
+	  int size = asio::buffer_size(out_buf_.data());
+	  bool hasMore = false;
+	  payloadLength = 0;
+	  do {
+		unsigned char buffer[16 * 1024];
+		int bs = deflate(data, size, buffer, hasMore);
 
-	std::size_t payloadLength = size;
+		if (!hasMore) {
+		  // strip trailing for 0x0 0x0 0xff 0xff bytes
+		  bs = bs - 4;
+		}
+		
+		buffers.push_back(buf(std::string((char*)buffer, bs)));
+		payloadLength+=bs;
+	  } while (hasMore);
+
+	  assert(zOutState_.avail_in == 0);
+
+	  //TODO need to free out_buf
+	  if (request_.pmdState_.server_max_window_bits < 0) // context_takeover
+		deflateReset(&zOutState_);
+
+	  if(payloadLength <= 0) {
+		LOG_ERROR("ws: deflate failed");
+		sending_ = 0;
+		return;
+	  }
+	}
+#endif
 
 	if (payloadLength < 126) {
 	  gatherBuf_[0] = (char)payloadLength;
@@ -563,7 +611,15 @@ void WtReply::formatResponse(std::vector<asio::const_buffer>& result)
 	  result.push_back(asio::buffer(gatherBuf_, 9));
 	}
 
-	result.push_back(out_buf_.data());
+#ifdef WTHTTP_WITH_ZLIB
+	// Compress frame if compression is enabled
+	if(request_.pmdState_.enabled) 
+	  for(unsigned i = 0; i < buffers.size() ; ++i) 
+		result.push_back(buffers[i]);
+	else 
+#endif
+	  result.push_back(out_buf_.data());
+
       }
       break;
     default:
@@ -602,8 +658,73 @@ bool WtReply::nextContentBuffers(std::vector<asio::const_buffer>& result)
     formatResponse(result);
   }
 
-  return httpRequest_->done();
+  return httpRequest_ ? httpRequest_->done() : true;
 }
 
+
+#ifdef WTHTTP_WITH_ZLIB
+
+bool WtReply::initDeflate() 
+{
+  zOutState_.zalloc = nullptr;
+  zOutState_.zfree = nullptr;
+  zOutState_.opaque = nullptr;
+
+  int wsize = request_.pmdState_.server_max_window_bits != -1 ?
+	request_.pmdState_.server_max_window_bits : SERVER_MAX_WINDOW_BITS;
+
+  int ret = deflateInit2(
+	  &zOutState_,
+	  Z_DEFAULT_COMPRESSION,
+	  Z_DEFLATED,
+	  -1* wsize,
+	  8, // memory level 1-9
+	  Z_FIXED
+	  );
+  if(ret != Z_OK) return false;
+  deflateInitialized_ = true;
+  return true;
+}
+  
+int WtReply::deflate(const unsigned char* in, size_t size, unsigned char out[], bool& hasMore)
+{
+  size_t output = 0;
+  const int bufferSize = 16 * 1024;
+
+  LOG_DEBUG("wthttp: wt: deflate frame");
+
+  if(!deflateInitialized_) {
+	if(!initDeflate())
+	  return -1;
   }
+  
+  // If it's the first iteration init the data
+  if(!hasMore) {
+    // Set only at the first iteration
+    zOutState_.avail_in = size;
+    zOutState_.next_in = const_cast<unsigned char *>(in);
+  }
+
+  // Output to local buffer
+  zOutState_.avail_out = bufferSize;
+  zOutState_.next_out = out;
+
+  hasMore = true;
+
+  int ret = ::deflate(&zOutState_, 
+      request_.pmdState_.server_max_window_bits < 0 
+      ? Z_FULL_FLUSH : Z_SYNC_FLUSH);
+  
+  assert(ret != Z_STREAM_ERROR);
+
+  output = bufferSize - zOutState_.avail_out;
+
+  if (zOutState_.avail_out != 0) 
+    hasMore = false;
+
+  return output; 
+}
+#endif
+  
+}
 }

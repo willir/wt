@@ -16,7 +16,6 @@
 #define DEBUG
 
 #include <vector>
-#include <boost/bind.hpp>
 
 #include "Connection.h"
 #include "ConnectionManager.h"
@@ -29,10 +28,17 @@ namespace Wt {
   LOGGER("wthttp/async");
 }
 
+#if BOOST_VERSION >= 104900
+typedef std::chrono::seconds asio_timer_seconds;
+#else
+typedef boost::posix_time::seconds asio_timer_seconds;
+#endif
+
 namespace http {
 namespace server {
 
-static const int CONNECTION_TIMEOUT = 120; // 2 minutes
+static const int CONNECTION_TIMEOUT = 300; // 5 minutes
+static const int BODY_TIMEOUT = 600;       // 10 minutes
 static const int KEEPALIVE_TIMEOUT  = 10;  // 10 seconds
 
 Connection::Connection(asio::io_service& io_service, Server *server,
@@ -55,6 +61,18 @@ Connection::~Connection()
   LOG_DEBUG("~Connection");
 }
 
+#if (defined(WT_ASIO_IS_BOOST_ASIO) && BOOST_VERSION >= 106600) || (defined(WT_ASIO_IS_STANDALONE_ASIO) && ASIO_VERSION >= 101100)
+asio::ip::tcp::socket::native_handle_type Connection::native()
+{
+  return socket().native_handle();
+}
+#else
+asio::ip::tcp::socket::native_type Connection::native()
+{
+  return socket().native();
+}
+#endif
+
 void Connection::finishReply()
 { 
   if (!request_.uri.empty()) {
@@ -67,12 +85,12 @@ void Connection::finishReply()
 void Connection::scheduleStop()
 {
   server_->service()
-    .post(strand_.wrap(boost::bind(&Connection::stop, shared_from_this())));
+    .post(strand_.wrap(std::bind(&Connection::stop, shared_from_this())));
 }
 
 void Connection::start()
 {
-  LOG_DEBUG(socket().native() << ": start()");
+  LOG_DEBUG(native() << ": start()");
 
   request_parser_.reset();
   request_.reset();
@@ -83,7 +101,7 @@ void Connection::start()
     LOG_ERROR("remote_endpoint() threw: " << e.what());
   }
 
-  asio_error_code ignored_ec;
+  Wt::AsioWrapper::error_code ignored_ec;
   socket().set_option(asio::ip::tcp::no_delay(true), ignored_ec);
 
   rcv_buffers_.push_back(Buffer());
@@ -100,30 +118,30 @@ void Connection::stop()
 void Connection::setReadTimeout(int seconds)
 {
   if (seconds != 0) {
-    LOG_DEBUG(socket().native() << " setting read timeout (ws: "
+    LOG_DEBUG(native() << " setting read timeout (ws: "
 	      << request_.webSocketVersion << ")");
     state_ |= Reading;
 
-    readTimer_.expires_from_now(boost::posix_time::seconds(seconds));
-    readTimer_.async_wait(boost::bind(&Connection::timeout, shared_from_this(),
-				      asio::placeholders::error));
+    readTimer_.expires_from_now(asio_timer_seconds(seconds));
+    readTimer_.async_wait(std::bind(&Connection::timeout, shared_from_this(),
+				    std::placeholders::_1));
   }
 }
 
 void Connection::setWriteTimeout(int seconds)
 {
-  LOG_DEBUG(socket().native() << " setting write timeout (ws: "
+  LOG_DEBUG(native() << " setting write timeout (ws: "
 	    << request_.webSocketVersion << ")");
   state_ |= Writing;
 
-  writeTimer_.expires_from_now(boost::posix_time::seconds(seconds));
-  writeTimer_.async_wait(boost::bind(&Connection::timeout, shared_from_this(),
-				      asio::placeholders::error));
+  writeTimer_.expires_from_now(asio_timer_seconds(seconds));
+  writeTimer_.async_wait(std::bind(&Connection::timeout, shared_from_this(),
+				   std::placeholders::_1));
 }
 
 void Connection::cancelReadTimer()
 {
-  LOG_DEBUG(socket().native() << " cancel read timeout");
+  LOG_DEBUG(native() << " cancel read timeout");
   state_.clear(Reading);
 
   readTimer_.cancel();
@@ -131,21 +149,21 @@ void Connection::cancelReadTimer()
 
 void Connection::cancelWriteTimer()
 {
-  LOG_DEBUG(socket().native() << " cancel write timeout");
+  LOG_DEBUG(native() << " cancel write timeout");
   state_.clear(Writing);
 
   writeTimer_.cancel();
 }
 
-void Connection::timeout(const asio_error_code& e)
+void Connection::timeout(const Wt::AsioWrapper::error_code& e)
 {
   if (e != asio::error::operation_aborted)
-    strand_.post(boost::bind(&Connection::doTimeout, shared_from_this()));
+    strand_.post(std::bind(&Connection::doTimeout, shared_from_this()));
 }
 
 void Connection::doTimeout()
 {
-  asio_error_code ignored_ec;
+  Wt::AsioWrapper::error_code ignored_ec;
   socket().shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
   readTimer_.cancel();
   writeTimer_.cancel();
@@ -157,7 +175,7 @@ void Connection::handleReadRequest0()
 
 #ifdef DEBUG
   try {
-    LOG_DEBUG(socket().native() << "incoming request: "
+    LOG_DEBUG(socket().native_handle() << "incoming request: "
 	      << socket().remote_endpoint().port() << " (avail= "
 	      << (rcv_buffer_size_ - (rcv_remaining_ - buffer.data())) << "): "
 	      << std::string(rcv_remaining_,
@@ -171,7 +189,7 @@ void Connection::handleReadRequest0()
   boost::tribool result;
   boost::tie(result, rcv_remaining_)
     = request_parser_.parse(request_,
-			    rcv_remaining_, buffer.data() + rcv_buffer_size_);
+			    &*rcv_remaining_, buffer.data() + rcv_buffer_size_);
 
   if (result) {
     Reply::status_type status = request_parser_.validate(request_);
@@ -183,7 +201,7 @@ void Connection::handleReadRequest0()
     if (doWebSockets)
       request_.enableWebSocket();
 
-    LOG_DEBUG(socket().native() << "request: " << status);
+    LOG_DEBUG(native() << "request: " << status);
 
     if (status >= 300)
       sendStockReply(status);
@@ -202,7 +220,7 @@ void Connection::handleReadRequest0()
 	reply = request_handler_.handleRequest
 	  (request_, lastWtReply_, lastProxyReply_, lastStaticReply_);
 	reply->setConnection(shared_from_this());
-      } catch (asio_system_error& e) {
+      } catch (Wt::AsioWrapper::system_error& e) {
 	LOG_ERROR("Error in handleRequest0(): " << e.what());
 	handleError(e.code());
 	return;
@@ -233,10 +251,10 @@ void Connection::sendStockReply(StockReply::status_type status)
   startWriteResponse(reply);
 }
 
-void Connection::handleReadRequest(const asio_error_code& e,
+void Connection::handleReadRequest(const Wt::AsioWrapper::error_code& e,
 				   std::size_t bytes_transferred)
 {
-  LOG_DEBUG(socket().native() << ": handleReadRequest(): " << e.message());
+  LOG_DEBUG(native() << ": handleReadRequest(): " << e.message());
 
   cancelReadTimer();
 
@@ -255,7 +273,7 @@ void Connection::close()
   cancelReadTimer();
   cancelWriteTimer();
 
-  LOG_DEBUG(socket().native() << ": close()");
+  LOG_DEBUG(native() << ": close()");
 
   ConnectionManager_.stop(shared_from_this());
 }
@@ -266,26 +284,34 @@ bool Connection::closed() const
   return !self->socket().is_open();
 }
 
-void Connection::handleError(const asio_error_code& e)
+void Connection::handleError(const Wt::AsioWrapper::error_code& e)
 {
-  LOG_DEBUG(socket().native() << ": error: " << e.message());
+  LOG_DEBUG(native() << ": error: " << e.message());
 
   close();
 }
 
 void Connection::handleReadBody(ReplyPtr reply)
 {
-  haveResponse_ = false;
-  waitingResponse_ = true;
+  if (request_.type != Request::WebSocket) {
+    /*
+     * For a WebSocket: reading and writing may happen in parallel,
+     * And writing and reading is asynchronous (post() from within
+     * WtReply::consumeWebSocketMessage()
+     */
+    haveResponse_ = false;
+    waitingResponse_ = true;
+  }
 
   RequestParser::ParseResult result = request_parser_
     .parseBody(request_, reply, rcv_remaining_,
 	       rcv_buffers_.back().data() + rcv_buffer_size_);
 
-  waitingResponse_ = false;
+  if (request_.type != Request::WebSocket)
+    waitingResponse_ = false;
 
   if (result == RequestParser::ReadMore) {
-    readMore(reply, CONNECTION_TIMEOUT);
+    readMore(reply, BODY_TIMEOUT);
   } else if (result == RequestParser::Done && haveResponse_)
     startWriteResponse(reply);
 }
@@ -304,34 +330,56 @@ bool Connection::readAvailable()
   try {
     return (rcv_remaining_ < rcv_buffers_.back().data() + rcv_buffer_size_)
       || socket().available();
-  } catch (asio_system_error& e) {
+  } catch (Wt::AsioWrapper::system_error& e) {
     return false; // socket(): bad file descriptor
   }
 }
 
 void Connection::detectDisconnect(ReplyPtr reply,
-				  const boost::function<void()>& callback)
+				  const std::function<void()>& callback)
 {
-  disconnectCallback_ = callback;
-
-  readMore(reply, 0);
+  server_->service()
+    .post(strand_.wrap(std::bind(&Connection::asyncDetectDisconnect, this, reply, callback)));
 }
 
-void Connection::handleReadBody(ReplyPtr reply,
-				const asio_error_code& e,
-				std::size_t bytes_transferred)
+void Connection::asyncDetectDisconnect(ReplyPtr reply,
+				       const std::function<void()>& callback)
 {
-  LOG_DEBUG(socket().native() << ": handleReadBody(): " << e.message());
+  if (disconnectCallback_)
+    return; // We're already detecting the disconnect
+
+  disconnectCallback_ = callback;
+
+  /*
+   * We do not actually expect to receive anything, and if we do, we'll close
+   * anyway (see below).
+   */
+  startAsyncReadBody(reply, rcv_buffers_.back(), 0);
+}
+
+void Connection::handleReadBody0(ReplyPtr reply,
+                                 const Wt::AsioWrapper::error_code& e,
+				 std::size_t bytes_transferred)
+{
+  LOG_DEBUG(native() << ": handleReadBody0(): " << e.message());
 
   if (disconnectCallback_) {
     if (e && e != asio::error::operation_aborted) {
       boost::function<void()> f = disconnectCallback_;
       disconnectCallback_ = boost::function<void()>();
       f();
+<<<<<<< HEAD
     } else if (e != asio::error::operation_aborted) {
       LOG_ERROR(socket().native_handle()
+||||||| merged common ancestors
+    } else if (e != asio::error::operation_aborted) {
+      LOG_ERROR(socket().native()
+=======
+    } else if (!e) {
+      LOG_ERROR(native()
+>>>>>>> stable
 		<< ": handleReadBody(): while waiting for disconnect, "
-		"unexpected error code: " << e.message());
+		"received unexpected data, closing");
       close();
     }
 
@@ -362,7 +410,7 @@ void Connection::startWriteResponse(ReplyPtr reply)
     LOG_ERROR("Connection::startWriteResponse(): connection already writing");
     close();
     server_->service()
-      .post(strand_.wrap(boost::bind(&Reply::writeDone, reply, false)));
+      .post(strand_.wrap(std::bind(&Reply::writeDone, reply, false)));
     return;
   }
 
@@ -382,11 +430,11 @@ void Connection::startWriteResponse(ReplyPtr reply)
   }
 #endif
 
-  LOG_DEBUG(socket().native() << " sending: " << s << "(buffers: "
+  LOG_DEBUG(native() << " sending: " << s << "(buffers: "
 	    << buffers.size() << ")");
 
   if (!buffers.empty()) {
-    startAsyncWriteResponse(reply, buffers, CONNECTION_TIMEOUT);
+    startAsyncWriteResponse(reply, buffers, BODY_TIMEOUT);
   } else {
     cancelWriteTimer();
     handleWriteResponse(reply);
@@ -395,7 +443,7 @@ void Connection::startWriteResponse(ReplyPtr reply)
 
 void Connection::handleWriteResponse(ReplyPtr reply)
 {
-  LOG_DEBUG(socket().native() << ": handleWriteResponse() " <<
+  LOG_DEBUG(native() << ": handleWriteResponse() " <<
 	    haveResponse_ << " " << responseDone_);
   if (haveResponse_)
     startWriteResponse(reply);
@@ -426,11 +474,11 @@ void Connection::handleWriteResponse(ReplyPtr reply)
   }
 }
 
-void Connection::handleWriteResponse(ReplyPtr reply,
-				     const asio_error_code& e,
-				     std::size_t bytes_transferred)
+void Connection::handleWriteResponse0(ReplyPtr reply,
+                                      const Wt::AsioWrapper::error_code& e,
+				      std::size_t bytes_transferred)
 {
-  LOG_DEBUG(socket().native() << ": handleWriteResponse(): "
+  LOG_DEBUG(native() << ": handleWriteResponse0(): "
 	    << bytes_transferred << " ; " << e.message());
 
   cancelWriteTimer();

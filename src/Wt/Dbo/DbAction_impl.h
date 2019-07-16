@@ -7,9 +7,9 @@
 #ifndef WT_DBO_DBACTION_IMPL_H_
 #define WT_DBO_DBACTION_IMPL_H_
 
-#include <Wt/Dbo/Exception>
+#include <Wt/Dbo/Exception.h>
 #include <iostream>
-#include <boost/lexical_cast.hpp>
+#include <type_traits>
 
 namespace Wt {
   namespace Dbo {
@@ -69,24 +69,27 @@ void InitSchema::actId(ptr<C>& value, const std::string& name, int size,
 		    "Wt::Dbo::dbo_traits<C>::surrogateIdField() != 0");
 
   idField_ = true;
-  actPtr(PtrRef<C>(value, name, size, fkConstraints));
+  actPtr(PtrRef<C>(value, name, fkConstraints));
   idField_ = false;
 }
 
 template<typename V>
 void InitSchema::act(const FieldRef<V>& field)
 {
-  int flags = FieldInfo::Mutable | FieldInfo::NeedsQuotes;
+  int flags = FieldFlags::Mutable | FieldFlags::NeedsQuotes;
 
   if (idField_)
-    flags |= FieldInfo::NaturalId; // Natural id
+    flags |= FieldFlags::NaturalId; // Natural id
 
+  if ((field.flags() & FieldRef<V>::AuxId) || (fkFlags_ & PtrRef<V>::AuxId))
+    flags |= FieldFlags::AuxId; // Aux id (appended in update and delete)
+  
   if (!foreignKeyName_.empty())
     // Foreign key
     mapping_.fields.push_back
       (FieldInfo(field.name(), &typeid(V), field.sqlType(session_),
 		 foreignKeyTable_, foreignKeyName_,
-		 flags | FieldInfo::ForeignKey, fkConstraints_));
+		 flags | FieldFlags::ForeignKey, fkConstraints_));
   else
     // Normal field
     mapping_.fields.push_back
@@ -104,6 +107,7 @@ void InitSchema::actPtr(const PtrRef<C>& field)
     foreignKeyName_ = field.name();
     foreignKeyTable_ = mapping->tableName;
     fkConstraints_ = field.fkConstraints();
+    fkFlags_ = field.flags();
   }
 
   field.visit(*this, &session_);
@@ -112,6 +116,7 @@ void InitSchema::actPtr(const PtrRef<C>& field)
     foreignKeyName_.clear();
     foreignKeyTable_.clear();
     fkConstraints_ = 0;
+    fkFlags_ = 0;
   }
 }
 
@@ -139,6 +144,8 @@ void InitSchema::actCollection(const CollectionRef<C>& field)
   mapping_.sets.push_back
     (Impl::SetInfo(joinTableName, field.type(), joinName, field.joinId(),
 		      field.fkConstraints()));
+  if (field.literalJoinId())
+    mapping_.sets.back().flags |= Impl::SetInfo::LiteralSelfId;
 }
 
     /*
@@ -154,24 +161,24 @@ void DropSchema::visit(C& obj)
 }
 
 template<typename V>
-void DropSchema::actId(V& value, const std::string& name, int size)
+void DropSchema::actId(V& /* value */, const std::string& /* name */, int /* size */)
 { }
 
 template<class C>
-void DropSchema::actId(ptr<C>& value, const std::string& name, int size,
-		       int fkConstraints)
+void DropSchema::actId(ptr<C>& /* value */, const std::string& /* name */, int /* size */,
+		       int /* fkConstraints */)
 { }
 
 template<typename V>
-void DropSchema::act(const FieldRef<V>& field)
+void DropSchema::act(const FieldRef<V>& /* field */)
 { }
 
 template<class C>
-void DropSchema::actPtr(const PtrRef<C>& field)
+void DropSchema::actPtr(const PtrRef<C>& /* field */)
 { }
 
 template<class C>
-void DropSchema::actWeakPtr(const WeakPtrRef<C>& field)
+void DropSchema::actWeakPtr(const WeakPtrRef<C>& /* field */)
 { 
   const char *tableName = session_.tableName<C>();
   if (tablesDropped_.count(tableName) == 0) {
@@ -284,17 +291,7 @@ void LoadDbAction<C>::visit(C& obj)
 
   if (!continueStatement) {
 
-    bool forUpdate;
-    if(dbo_.isForUpdate()) {
-      forUpdate = true;
-    } else if(!dbo_.isForUpdate()) {
-      forUpdate = false;
-    } else {  // indeterminate (wasn't set explicitly)
-      forUpdate = session->transactionSelectType() == Transaction::FOR_UPDATE;
-    }
-
-    const int id = (forUpdate) ? Session::SqlSelectByIdForUpdate : Session::SqlSelectById;
-    use(statement_ = session->template getStatement<C>(id));
+    use(statement_ = session->template getStatement<C>(Session::SqlSelectById));
     statement_->reset();
 
     int column = 0;
@@ -304,8 +301,8 @@ void LoadDbAction<C>::visit(C& obj)
     statement_->execute();
 
     if (!statement_->nextRow()) {
-      throw ObjectNotFoundException
-	(boost::lexical_cast<std::string>(dbo_.id()));
+      throw ObjectNotFoundException(session->template tableName<C>(),
+                                    dbo_.idStr());
     }
   }
 
@@ -314,8 +311,7 @@ void LoadDbAction<C>::visit(C& obj)
   persist<C>::apply(obj, *this);
 
   if (!continueStatement && statement_->nextRow())
-    throw Exception("Dbo load: multiple rows for id "
-		    + boost::lexical_cast<std::string>(dbo_.id()) + " ??");
+    throw Exception("Dbo load: multiple rows for id " + dbo_.idStr());
 
   if (continueStatement)
     use(0);
@@ -335,7 +331,7 @@ template<class D>
 void LoadDbAction<C>::actId(ptr<D>& value, const std::string& name, int size,
 			    int fkConstraints)
 { 
-  actPtr(PtrRef<D>(value, name, size, fkConstraints));
+  actPtr(PtrRef<D>(value, name, fkConstraints));
 
   dbo_.setId(value);
 }
@@ -343,6 +339,28 @@ void LoadDbAction<C>::actId(ptr<D>& value, const std::string& name, int size,
     /*
      * SaveDbAction
      */
+
+template <class C>
+void SaveBaseAction::visitAuxIds(C& obj)
+{
+  auxIdOnly_ = true;
+  pass_ = Self;
+
+  persist<C>::apply(obj, *this);
+}
+
+template<typename V>
+void SaveBaseAction::actId(V& value, const std::string& name, int size)
+{
+  /* Only used from within visitAuxIds() */
+}
+
+template<class D>
+void SaveBaseAction::actId(ptr<D>& value, const std::string& name, int size,
+			   int fkConstraints)
+{ 
+  /* Only used from within visitAuxIds() */
+}
 
 template<class C>
 void SaveBaseAction::actPtr(const PtrRef<C>& field)
@@ -357,10 +375,18 @@ void SaveBaseAction::actPtr(const PtrRef<C>& field)
 
     break;
   case Self:
-    bindNull_ = !field.value();
-    field.visit(*this, session());
-    bindNull_ = false;
+    if (auxIdOnly_ && !(field.flags() & PtrRef<C>::AuxId))
+      return;
 
+    {
+      bool wasAuxIdOnly = auxIdOnly_;
+      auxIdOnly_ = false;
+      bindNull_ = !field.value();
+      field.visit(*this, session());
+      bindNull_ = false;
+      auxIdOnly_ = wasAuxIdOnly;
+    }
+    
     break;
   case Sets:
     break;
@@ -370,6 +396,9 @@ void SaveBaseAction::actPtr(const PtrRef<C>& field)
 template<class C>
 void SaveBaseAction::actWeakPtr(const WeakPtrRef<C>& field)
 {
+  if (auxIdOnly_)
+    return;
+
   switch (pass_) {
   case Dependencies:
     break;
@@ -387,6 +416,9 @@ void SaveBaseAction::actWeakPtr(const WeakPtrRef<C>& field)
 template<class C>
 void SaveBaseAction::actCollection(const CollectionRef<C>& field)
 {
+  if (auxIdOnly_)
+    return;
+
   switch (pass_) {
   case Dependencies:
     break;
@@ -509,7 +541,7 @@ void SaveDbAction<C>::visit(C& obj)
 
     if (!isInsert_) {
       MetaDboBase *dbo = dynamic_cast<MetaDboBase *>(&dbo_);
-      dbo->bindId(statement_, column_);
+      dbo->bindModifyId(statement_, column_);
 
       if (mapping().versionFieldName) {
 	// when saved in the transaction, we will be at version() + 1
@@ -523,10 +555,9 @@ void SaveDbAction<C>::visit(C& obj)
     if (!isInsert_) {
       int modifiedCount = statement_->affectedRowCount();
       if (modifiedCount != 1 && mapping().versionFieldName) {
-	MetaDbo<C>& dbo = static_cast< MetaDbo<C>& >(dbo_);
-	std::string idString = boost::lexical_cast<std::string>(dbo.id());
-
-	throw StaleObjectException(idString, dbo_.version());
+        throw StaleObjectException(dbo_.idStr(),
+                                   dbo_.session()->template tableName<C>(),
+                                   dbo_.version());
       }
     }
   }
@@ -559,7 +590,7 @@ template<class D>
 void SaveDbAction<C>::actId(ptr<D>& value, const std::string& name, int size,
 			   int fkConstraints)
 { 
-  actPtr(PtrRef<D>(value, name, size, fkConstraints));
+  actPtr(PtrRef<D>(value, name, fkConstraints));
 
   /* Later, we may also want to support id changes ? */
   if (pass_ == Self && isInsert_)
@@ -587,15 +618,15 @@ template<class C>
 void TransactionDoneAction::actId(ptr<C>& value, const std::string& name,
 				  int size, int fkConstraints)
 { 
-  actPtr(PtrRef<C>(value, name, size, fkConstraints));
+  actPtr(PtrRef<C>(value, name, fkConstraints));
 }
 
 template<typename V>
-void TransactionDoneAction::act(const FieldRef<V>& field)
+void TransactionDoneAction::act(const FieldRef<V>& /* field */)
 { }
 
 template<class C>
-void TransactionDoneAction::actPtr(const PtrRef<C>& field)
+void TransactionDoneAction::actPtr(const PtrRef<C>& /* field */)
 { }
 
 template<class C>
@@ -648,15 +679,15 @@ template<class C>
 void SessionAddAction::actId(ptr<C>& value, const std::string& name,
 			     int size, int fkConstraints)
 { 
-  actPtr(PtrRef<C>(value, name, size, fkConstraints));
+  actPtr(PtrRef<C>(value, name, fkConstraints));
 }
 
 template<typename V>
-void SessionAddAction::act(const FieldRef<V>& field)
+void SessionAddAction::act(const FieldRef<V>& /* field */)
 { }
 
 template<class C>
-void SessionAddAction::actPtr(const PtrRef<C>& field)
+void SessionAddAction::actPtr(const PtrRef<C>& /* field */)
 { }
 
 template<class C>
@@ -693,11 +724,11 @@ template<class C>
 void SetReciproceAction::actId(ptr<C>& value, const std::string& name,
 			       int size, int fkConstraints)
 { 
-  actPtr(PtrRef<C>(value, name, size, fkConstraints));
+  actPtr(PtrRef<C>(value, name, fkConstraints));
 }
 
 template<typename V>
-void SetReciproceAction::act(const FieldRef<V>& field)
+void SetReciproceAction::act(const FieldRef<V>& /* field */)
 { }
 
 template<class C>
@@ -708,12 +739,12 @@ void SetReciproceAction::actPtr(const PtrRef<C>& field)
 }
 
 template<class C>
-void SetReciproceAction::actWeakPtr(const WeakPtrRef<C>& field)
+void SetReciproceAction::actWeakPtr(const WeakPtrRef<C>& /* field */)
 {
 }
 
 template<class C>
-void SetReciproceAction::actCollection(const CollectionRef<C>& field)
+void SetReciproceAction::actCollection(const CollectionRef<C>& /* field */)
 {
 }
 
@@ -746,21 +777,21 @@ void ToAnysAction::visit(const ptr<C>& obj)
 template <typename V, class Enable = void>
 struct ToAny
 {
-  static boost::any convert(const V& v) {
+  static cpp17::any convert(const V& v) {
     return v;
   }  
 };
 
 template <typename Enum>
-struct ToAny<Enum, typename boost::enable_if<boost::is_enum<Enum> >::type> 
+struct ToAny<Enum, typename std::enable_if<std::is_enum<Enum>::value>::type> 
 {
-  static boost::any convert(const Enum& v) {
+  static cpp17::any convert(const Enum& v) {
     return static_cast<int>(v);
   }
 };
 
 template <typename V>
-boost::any convertToAny(const V& v) {
+cpp17::any convertToAny(const V& v) {
   return ToAny<V>::convert(v);
 }
 
@@ -774,14 +805,14 @@ template<class C>
 void ToAnysAction::actId(ptr<C>& value, const std::string& name,
 			 int size, int fkConstraints)
 { 
-  actPtr(PtrRef<C>(value, name, size, fkConstraints));
+  actPtr(PtrRef<C>(value, name, fkConstraints));
 }
 
 template<typename V>
 void ToAnysAction::act(const FieldRef<V>& field)
 { 
   if (allEmpty_)
-    result_.push_back(boost::any());
+    result_.push_back(cpp17::any());
   else
     result_.push_back(convertToAny(field.value()));
 }
@@ -793,11 +824,11 @@ void ToAnysAction::actPtr(const PtrRef<C>& field)
 }
 
 template<class C>
-void ToAnysAction::actWeakPtr(const WeakPtrRef<C>& field)
+void ToAnysAction::actWeakPtr(const WeakPtrRef<C>& /* field */)
 { }
 
 template<class C>
-void ToAnysAction::actCollection(const CollectionRef<C>& field)
+void ToAnysAction::actCollection(const CollectionRef<C>& /* field */)
 { }
 
     /*
@@ -833,16 +864,16 @@ void FromAnyAction::visit(const ptr<C>& obj)
 template <typename V, class Enable = void>
 struct FromAny
 {
-  static V convert(const boost::any& v) {
-    return boost::any_cast<V>(v);
+  static V convert(const cpp17::any& v) {
+    return cpp17::any_cast<V>(v);
   }  
 };
 
 template <typename Enum>
-struct FromAny<Enum, typename boost::enable_if<boost::is_enum<Enum> >::type>
+struct FromAny<Enum, typename std::enable_if<std::is_enum<Enum>::value>::type>
 {
-  static Enum convert(const boost::any& v) {
-    return static_cast<Enum>(boost::any_cast<int>(v));
+  static Enum convert(const cpp17::any& v) {
+    return static_cast<Enum>(cpp17::any_cast<int>(v));
   }
 };
 
@@ -856,7 +887,7 @@ template<class C>
 void FromAnyAction::actId(ptr<C>& value, const std::string& name, int size,
 			  int fkConstraints)
 {
-  actPtr(PtrRef<C>(value, name, size, fkConstraints));
+  actPtr(PtrRef<C>(value, name, fkConstraints));
 }
 
 template<typename V>
@@ -877,11 +908,11 @@ void FromAnyAction::actPtr(const PtrRef<C>& field)
 }
 
 template<class C>
-void FromAnyAction::actWeakPtr(const WeakPtrRef<C>& field)
+void FromAnyAction::actWeakPtr(const WeakPtrRef<C>& /* field */)
 { }
 
 template<class C>
-void FromAnyAction::actCollection(const CollectionRef<C>& field)
+void FromAnyAction::actCollection(const CollectionRef<C>& /* field */)
 { }
 
   }

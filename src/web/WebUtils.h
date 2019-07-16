@@ -10,11 +10,11 @@
 #include <algorithm>
 #include <cstring>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <sstream>
 #include <vector>
-#include <boost/algorithm/string.hpp>
 #include <cstdlib>
 
 #include <Wt/WDllDefs.h>
@@ -37,6 +37,21 @@ namespace Wt {
 
   namespace Utils {
 
+#ifndef WT_TARGET_JAVA
+template<typename Derived, typename Base>
+std::unique_ptr<Derived> dynamic_unique_ptr_cast(std::unique_ptr<Base>&& p)
+{
+  if (Derived *result = dynamic_cast<Derived *>(p.get())) {
+    p.release();
+    return std::unique_ptr<Derived>(result);
+  } else
+    return std::unique_ptr<Derived>();
+}
+#else
+template<typename Derived, typename Base>
+std::unique_ptr<Derived> dynamic_unique_ptr_cast(std::unique_ptr<Base> p);
+#endif
+
 // appends the character to the string if it does not end with it
 extern std::string append(const std::string& s, char c);
 extern std::string prepend(const std::string& s, char c);
@@ -53,7 +68,7 @@ extern std::string lowerCase(const std::string& s);
 extern void sanitizeUnicode(EscapeOStream& sout, const std::string& text);
 
 // word manipulation (for style class editing)
-extern std::string eraseWord(const std::string& s, const std::string& w);
+extern std::string WT_API eraseWord(const std::string& s, const std::string& w);
 extern std::string addWord(const std::string& s, const std::string& w);
 
 // Fast integer to string in given buffer
@@ -69,7 +84,7 @@ inline bool startsWith(const char *a, const char *b, int n) {
 }
 
 inline int hexToInt(const char* str) {
-  return std::strtol(str, 0, 16);
+  return std::strtol(str, nullptr, 16);
 }
 
 inline int length(const std::stringstream& s) {
@@ -118,6 +133,37 @@ inline bool erase(std::vector<T>& v, const T& value)
   } else
     return false;
 }
+
+template<typename T>
+inline std::unique_ptr<T> take(std::vector<std::unique_ptr<T> >& v,
+			       const T *value)
+{
+  for (std::size_t i = 0; i < v.size();) {
+    if (v[i].get() == value) {
+      auto result = std::move(v[i]);
+      v.erase(v.begin() + i);
+      return result;
+    } else {
+      ++i;
+    }
+  }
+
+  return std::unique_ptr<T>();
+}
+
+template<typename K, typename V>
+inline const K * keyForUniquePtrValue(const std::map<K, std::unique_ptr<V> >& m, const V *v)
+#ifndef WT_TARGET_JAVA
+{
+  for (auto& i : m)
+    if (i.second.get() == v)
+      return &i.first;
+
+  return nullptr;
+}
+#else // WT_TARGET_JAVA
+;
+#endif
 
 template<typename K, typename V>
 void eraseAndNext(std::map<K, V>& m, typename std::map<K, V>::iterator& i)
@@ -216,22 +262,6 @@ extern char *round_js_str(double d, int digits, char *buf);
 
 // Only for Java target
 extern std::string toHexString(int i);
-
-#ifndef WT_TARGET_JAVA
-typedef boost::iterator_range<std::string::const_iterator> SplitEntry;
-#else
-typedef std::string SplitEntry;
-#endif
-
-typedef std::vector<SplitEntry> SplitVector;
-typedef std::set<SplitEntry> SplitSet;
-
-// Splits a string in a set of strings, on every given token
-extern void split(SplitSet& tokens,
-		  const std::string &in, const char *sep,
-		  bool compress_adjacent_tokens);
-
-extern std::string splitEntryToString(SplitEntry se);
 
 // Replace all occurences of the 'from' char to the 'to' char in 'v'
 extern void replaceAll(std::string& v, char from, char to);
@@ -332,7 +362,16 @@ int sizeofFunction(const T &t) { return sizeof(t)/sizeof(*t); }
 int sizeofFunction(const double[]);
 int sizeofFunction(const float[]);
 int sizeofFunction(const int[]);
+int sizeofFunction(const std::string[]);
 #endif
+
+extern long WT_API stol(const std::string& v);
+extern unsigned long WT_API stoul(const std::string& v);
+extern long long WT_API stoll(const std::string& v);
+extern unsigned long long WT_API stoull(const std::string& v);
+extern int WT_API stoi(const std::string& v);
+extern double WT_API stod(const std::string& v);
+extern float WT_API stof(const std::string& v);
 
   }
 }

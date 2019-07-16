@@ -7,15 +7,15 @@
 #include <cassert>
 #include <cmath>
 
-#include "Wt/WLogger"
-#include "Wt/WPainterPath"
-#include "Wt/WPointF"
-#include "Wt/WRectF"
-#include "Wt/WString"
-#include "Wt/WTransform"
+#include "Wt/WLogger.h"
+#include "Wt/WPainterPath.h"
+#include "Wt/WPointF.h"
+#include "Wt/WRectF.h"
+#include "Wt/WString.h"
+#include "Wt/WTransform.h"
 
-#include "Wt/Json/Array"
-#include "Wt/Json/Value"
+#include "Wt/Json/Array.h"
+#include "Wt/Json/Value.h"
 
 #include "WebUtils.h"
 
@@ -53,7 +53,11 @@ WTransform& WTransform::operator= (const WTransform& rhs)
 #ifndef WT_TARGET_JAVA
   WJavaScriptExposableObject::operator=(rhs);
 #else
-  if (rhs.isJavaScriptBound()) assignBinding(rhs);
+  if (rhs.isJavaScriptBound()) {
+    assignBinding(rhs);
+  } else {
+    clientBinding_ = 0;
+  }
 #endif
 
   for (unsigned i = 0; i < 6; ++i)
@@ -177,8 +181,8 @@ WPainterPath WTransform::map(const WPainterPath& path) const
 
   for (std::size_t i = 0; i < sourceSegments.size(); ++i) {
     double tx, ty;
-    if (sourceSegments[i].type() == WPainterPath::Segment::ArcR ||
-	sourceSegments[i].type() == WPainterPath::Segment::ArcAngleSweep) {
+    if (sourceSegments[i].type() == ArcR ||
+	sourceSegments[i].type() == ArcAngleSweep) {
       result.segments_.push_back(sourceSegments[i]);
     } else {
       map(sourceSegments[i].x(), sourceSegments[i].y(), &tx, &ty);
@@ -232,18 +236,27 @@ WTransform& WTransform::translate(double dx, double dy)
 
 WTransform& WTransform::translate(const WPointF& p)
 {
+  bool identity = isIdentity();
   std::string refBefore = jsRef();
   translate(p.x(), p.y());
 
   if (isJavaScriptBound() || p.isJavaScriptBound()) {
     const WJavaScriptExposableObject *o = this;
     if (!isJavaScriptBound()) o = &p;
-    assignBinding(*o,
-	WT_CLASS ".gfxUtils.transform_mult((function(){"
-	  "var p="
-	  + p.jsRef() + ";"
+    if (identity) {
+      assignBinding(*o,
+	"((function(){"
+	  "var p=" + p.jsRef() + ";"
 	  "return [1,0,0,1,p[0],p[1]];"
-	"})(),(" + refBefore + "))");
+	"})())");
+    } else {
+      assignBinding(*o,
+	  WT_CLASS ".gfxUtils.transform_mult((function(){"
+	    "var p="
+	    + p.jsRef() + ";"
+	    "return [1,0,0,1,p[0],p[1]];"
+	  "})(),(" + refBefore + "))");
+    }
   }
 
   return *this;
@@ -538,12 +551,12 @@ std::string WTransform::jsValue() const
 
   WStringStream ss;
   ss << '[';
-  ss << Utils::round_js_str(m_[0], 3, buf) << ',';
-  ss << Utils::round_js_str(m_[2], 3, buf) << ',';
-  ss << Utils::round_js_str(m_[1], 3, buf) << ',';
-  ss << Utils::round_js_str(m_[3], 3, buf) << ',';
-  ss << Utils::round_js_str(m_[4], 3, buf) << ',';
-  ss << Utils::round_js_str(m_[5], 3, buf) << ']';
+  ss << Utils::round_js_str(m_[0], 16, buf) << ',';
+  ss << Utils::round_js_str(m_[2], 16, buf) << ',';
+  ss << Utils::round_js_str(m_[1], 16, buf) << ',';
+  ss << Utils::round_js_str(m_[3], 16, buf) << ',';
+  ss << Utils::round_js_str(m_[4], 16, buf) << ',';
+  ss << Utils::round_js_str(m_[5], 16, buf) << ']';
   return ss.str();
 }
 
@@ -571,6 +584,21 @@ void WTransform::assignFromJSON(const Json::Value &value)
   } catch (std::exception &e) {
     LOG_ERROR("Couldn't convert JSON to WTransform: " + std::string(e.what()));
   }
+}
+
+bool WTransform::closeTo(const WTransform &other) const
+{
+  if (isJavaScriptBound() || other.isJavaScriptBound())
+    return false;
+
+  static const double EPS = 1E-12;
+
+  return std::fabs(m_[0] - other.m_[0]) <= EPS &&
+         std::fabs(m_[1] - other.m_[1]) <= EPS &&
+         std::fabs(m_[2] - other.m_[2]) <= EPS &&
+         std::fabs(m_[3] - other.m_[3]) <= EPS &&
+         std::fabs(m_[4] - other.m_[4]) <= EPS &&
+         std::fabs(m_[5] - other.m_[5]) <= EPS;
 }
 
 }

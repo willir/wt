@@ -4,59 +4,60 @@
  * See the LICENSE file for terms of use.
  */
 
-#include "Wt/WPen"
+#include "Wt/WPen.h"
 
-#include "Wt/WLogger"
-#include "Wt/WStringStream"
+#include "Wt/WLogger.h"
+#include "Wt/WStringStream.h"
 
-#include "Wt/Json/Array"
-#include "Wt/Json/Object"
-#include "Wt/Json/Value"
+#include "Wt/Json/Array.h"
+#include "Wt/Json/Object.h"
+#include "Wt/Json/Value.h"
 
 namespace Wt {
 
 LOGGER("WPen");
 
 WPen::WPen()
-  : penStyle_(SolidLine),
-    penCapStyle_(SquareCap),
-    penJoinStyle_(BevelJoin),
+  : penStyle_(PenStyle::SolidLine),
+    penCapStyle_(PenCapStyle::Square),
+    penJoinStyle_(PenJoinStyle::Bevel),
     width_(0),
-    color_(black)
+    color_(StandardColor::Black)
 { }
 
 WPen::WPen(PenStyle style)
   : penStyle_(style),
-    penCapStyle_(SquareCap),
-    penJoinStyle_(BevelJoin),
+    penCapStyle_(PenCapStyle::Square),
+    penJoinStyle_(PenJoinStyle::Bevel),
     width_(0),
-    color_(black)
+    color_(StandardColor::Black)
 { }
 
 WPen::WPen(const WColor& color)
-  : penStyle_(SolidLine),
-    penCapStyle_(SquareCap),
-    penJoinStyle_(BevelJoin),
+  : penStyle_(PenStyle::SolidLine),
+    penCapStyle_(PenCapStyle::Square),
+    penJoinStyle_(PenJoinStyle::Bevel),
     width_(0),
     color_(color)
 { }
 
-WPen::WPen(GlobalColor color)
-  : penStyle_(SolidLine),
-    penCapStyle_(SquareCap),
-    penJoinStyle_(BevelJoin),
+WPen::WPen(StandardColor color)
+  : penStyle_(PenStyle::SolidLine),
+    penCapStyle_(PenCapStyle::Square),
+    penJoinStyle_(PenJoinStyle::Bevel),
     width_(0),
-    color_(color)
+    color_(WColor(color))
 { }
 
 WPen::WPen(const WGradient& gradient)
-  : penStyle_(SolidLine),
-    penCapStyle_(SquareCap),
-    penJoinStyle_(BevelJoin),
+  : penStyle_(PenStyle::SolidLine),
+    penCapStyle_(PenCapStyle::Square),
+    penJoinStyle_(PenJoinStyle::Bevel),
     width_(0),
-    color_(black),
-    gradient_(gradient)
-{ }
+    color_(StandardColor::Black)
+{
+  gradient_ = gradient;
+}
 
 #ifdef WT_TARGET_JAVA
 WPen WPen::clone() const

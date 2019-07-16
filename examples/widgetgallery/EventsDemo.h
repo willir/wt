@@ -18,9 +18,9 @@ public:
   void populateSubMenu(Wt::WMenu *menu);
 
 private:
-  Wt::WWidget *wKeyEvent();
-  Wt::WWidget *wMouseEvent();
-  Wt::WWidget *wDropEvent();
+  std::unique_ptr<Wt::WWidget> wKeyEvent();
+  std::unique_ptr<Wt::WWidget> wMouseEvent();
+  std::unique_ptr<Wt::WWidget> wDropEvent();
 
   void showKeyWentUp(const Wt::WKeyEvent &e);
   void showKeyWentDown(const Wt::WKeyEvent &e);

@@ -7,18 +7,19 @@
 #include <cmath>
 #include <cstdio>
 
-#include "Wt/Chart/WPieChart"
-#include "Wt/Chart/WStandardPalette"
+#include "Wt/Chart/WAbstractChartModel.h"
+#include "Wt/Chart/WPieChart.h"
+#include "Wt/Chart/WStandardPalette.h"
 
-#include "Wt/WAbstractItemModel"
-#include "Wt/WContainerWidget"
-#include "Wt/WCssDecorationStyle"
-#include "Wt/WText"
-#include "Wt/WPainter"
-#include "Wt/WPolygonArea"
-#include "Wt/WApplication"
-#include "Wt/WEnvironment"
-#include "Wt/WException"
+#include "Wt/WContainerWidget.h"
+#include "Wt/WCssDecorationStyle.h"
+#include "Wt/WText.h"
+#include "Wt/WPainter.h"
+#include "Wt/WPolygonArea.h"
+#include "Wt/WApplication.h"
+#include "Wt/WEnvironment.h"
+#include "Wt/WException.h"
+#include "Wt/WModelIndex.h"
 
 #include "WebUtils.h"
 
@@ -34,18 +35,18 @@ WPieChart::PieData::PieData()
     explode(0)
 { }
 
-WPieChart::WPieChart(WContainerWidget *parent)
-  : WAbstractChart(parent),
-    labelsColumn_(-1),
+WPieChart::WPieChart()
+  : labelsColumn_(-1),
     dataColumn_(-1),
     height_(0.0),
     startAngle_(45),
     avoidLabelRendering_(0.0),
-    labelOptions_(0),
+    labelOptions_(None),
     shadow_(false),
     labelFormat_(WString::fromUTF8("%.3g%%"))
 {
-  setPalette(new WStandardPalette(WStandardPalette::Neutral));
+  setPalette
+    (std::make_shared<WStandardPalette>(PaletteFlavour::Neutral));
   setPlotAreaPadding(5);
 }
 
@@ -141,15 +142,14 @@ void WPieChart::setDisplayLabels(WFlags<LabelOption> options)
   update();
 }
 
-WWidget* WPieChart::createLegendItemWidget(int index, 
-					   WFlags<LabelOption> options)
+std::unique_ptr<WWidget>
+WPieChart::createLegendItemWidget(int index, WFlags<LabelOption> options)
 {
-  WContainerWidget* legendItem = new WContainerWidget();
+  std::unique_ptr<WContainerWidget> legendItem(new WContainerWidget());
   legendItem->setPadding(4);
   
-  WText* colorText = new WText();
-  legendItem->addWidget(colorText);
-  colorText->setPadding(10, Left | Right);
+  auto colorText = legendItem->addWidget(std::unique_ptr<WText>());
+  colorText->setPadding(10, WFlags<Side>(Side::Left) | Side::Right);
   colorText->decorationStyle().setBackgroundColor(brush(index).color());
 
   if (WApplication::instance()->environment().agentIsIE())
@@ -159,23 +159,23 @@ WWidget* WPieChart::createLegendItemWidget(int index,
 
   if (dataColumn_ != -1)
     for (int i = 0; i < model()->rowCount(); ++i) {
-      double v = asNumber(model()->data(i, dataColumn_));
+      double v = model()->data(i, dataColumn_);
       if (!Utils::isNaN(v))
 	total += v;
     }
 
-  double value = asNumber(model()->data(index, dataColumn_));
+  double value = model()->data(index, dataColumn_);
   if (!Utils::isNaN(value)) {
     WString label = labelText(index, value, total, options);
     if (!label.empty()) {
-      WText* l = new WText(label);
-      l->setPadding(5, Left);
-      l->setToolTip(asString(model()->data(index, dataColumn_, ToolTipRole)));
-      legendItem->addWidget(l);
+      std::unique_ptr<WText> l(new WText(label));
+      l->setPadding(5, Side::Left);
+      l->setToolTip(model()->toolTip(index, dataColumn_));
+      legendItem->addWidget(std::move(l));
     }
   }
 
-  return legendItem;
+  return std::move(legendItem);
 }
 
 void WPieChart::paint(WPainter& painter, const WRectF& rectangle) const
@@ -184,7 +184,7 @@ void WPieChart::paint(WPainter& painter, const WRectF& rectangle) const
 
   if (dataColumn_ != -1)
     for (int i = 0; i < model()->rowCount(); ++i) {
-      double v = asNumber(model()->data(i, dataColumn_));
+      double v = model()->data(i, dataColumn_);
       if (!Utils::isNaN(v))
 	total += v;
     }
@@ -197,11 +197,11 @@ void WPieChart::paint(WPainter& painter, const WRectF& rectangle) const
   if (rect.isNull() || rect.isEmpty())
     rect = painter.window();
 
-  rect.setX(rect.x() + plotAreaPadding(Left));
-  rect.setY(rect.y() + plotAreaPadding(Top));
-  rect.setWidth(rect.width() - plotAreaPadding(Left) - plotAreaPadding(Right));
-  rect.setHeight(rect.height() - plotAreaPadding(Top)
-		 - plotAreaPadding(Bottom));
+  rect.setX(rect.x() + plotAreaPadding(Side::Left));
+  rect.setY(rect.y() + plotAreaPadding(Side::Top));
+  rect.setWidth(rect.width() - plotAreaPadding(Side::Left) - plotAreaPadding(Side::Right));
+  rect.setHeight(rect.height() - plotAreaPadding(Side::Top)
+		 - plotAreaPadding(Side::Bottom));
 
   double side = std::min(rect.width(), rect.height());
 
@@ -227,12 +227,12 @@ void WPieChart::paint(WPainter& painter, const WRectF& rectangle) const
   painter.restore();
 
   painter.translate(0, -h/4);
-  if (labelOptions_) {
+  if (!labelOptions_.empty()) {
     if (total != 0) {
       double currentAngle = startAngle_;
 
       for (int i = 0; i < model()->rowCount(); ++i) {
-	double v = asNumber(model()->data(i, dataColumn_));
+	double v = model()->data(i, dataColumn_);
 	if (Utils::isNaN(v))
 	  continue;
 
@@ -250,7 +250,7 @@ void WPieChart::paint(WPainter& painter, const WRectF& rectangle) const
 	double top;
 
 	double f;
-	if (labelOptions_ & Outside)
+	if (labelOptions_.test(LabelOption::Outside))
 	  f = pie_[i].explode + 1.1;
 	else
 	  f = pie_[i].explode + 0.7;
@@ -262,35 +262,35 @@ void WPieChart::paint(WPainter& painter, const WRectF& rectangle) const
 	WFlags<AlignmentFlag> alignment;
 
 	WColor c = painter.pen().color();
-	if (labelOptions_ & Outside) {
+	if (labelOptions_.test(LabelOption::Outside)) {
 	  if (midAngle < 90) {
 	    left = px;
 	    top = py - height;
-	    alignment = AlignLeft | AlignBottom;
+	    alignment = WFlags<AlignmentFlag>(AlignmentFlag::Left) | AlignmentFlag::Bottom;
 	  } else if (midAngle < 180) {
 	    left = px - width;
 	    top = py - height;
-	    alignment = AlignRight | AlignBottom;
+	    alignment = WFlags<AlignmentFlag>(AlignmentFlag::Right) | AlignmentFlag::Bottom;
 	  } else if (midAngle < 270) {
 	    left = px - width;
 	    top = py + h/2;
-	    alignment = AlignRight | AlignTop;
+	    alignment = WFlags<AlignmentFlag>(AlignmentFlag::Right) | AlignmentFlag::Top;
 	  } else {
 	    left = px;
 	    top = py + h/2;
-	    alignment = AlignLeft | AlignTop;
+	    alignment = WFlags<AlignmentFlag>(AlignmentFlag::Left) | AlignmentFlag::Top;
 	  }
 	} else {
 	  left = px - width/2;
 	  top = py - height/2;
-	  alignment = AlignCenter | AlignMiddle;
+	  alignment = WFlags<AlignmentFlag>(AlignmentFlag::Center) | AlignmentFlag::Middle;
 	  c = palette()->fontColor(i);
 	}
 
-	if ((v / total * 100) >= avoidLabelRendering_) {
-	  painter.setPen(WPen(c));
-	  painter.drawText(WRectF(left, top, width, height),
-			   alignment, labelText(i, v, total, labelOptions_));
+  if ((v / total * 100) >= avoidLabelRendering_) {
+    painter.setPen(WPen(c));
+    drawLabel(&painter, WRectF(left, top, width, height),
+             alignment, labelText(i, v, total, labelOptions_), i);
 	}
 
 	currentAngle = endAngle;
@@ -302,11 +302,69 @@ void WPieChart::paint(WPainter& painter, const WRectF& rectangle) const
     WFont oldFont = painter.font();
     painter.setFont(titleFont());
     painter.drawText(cx - 50, cy - r, 100, 50,
-		     AlignCenter | AlignTop, title());
+		     WFlags<AlignmentFlag>(AlignmentFlag::Center) | AlignmentFlag::Top, title());
     painter.setFont(oldFont);
   }
 
   painter.restore();
+}
+
+std::unique_ptr<WContainerWidget> WPieChart::createLabelWidget(std::unique_ptr<WWidget> textWidget,
+    WPainter* painter, const WRectF& rect,
+    Wt::WFlags<Wt::AlignmentFlag> alignmentFlags) const
+{
+  AlignmentFlag verticalAlign = alignmentFlags & AlignVerticalMask;
+  AlignmentFlag horizontalAlign = alignmentFlags & AlignHorizontalMask;
+
+  // style parent container
+  auto c = cpp14::make_unique<WContainerWidget>();
+  WWidget *tw = textWidget.get();
+  c->addWidget(std::move(textWidget));
+  c->setPositionScheme(PositionScheme::Absolute);
+  c->setAttributeValue("style", "display: flex;");
+
+  const WRectF& normRect = rect.normalized();
+  Wt::WTransform t = painter->worldTransform();
+  Wt::WPointF p = t.map(Wt::WPointF(normRect.left(), normRect.top()));
+
+  c->setWidth(WLength(normRect.width() * t.m11()));
+  c->setHeight(WLength(normRect.height() * t.m22()));
+  c->decorationStyle().setFont(painter->font());
+
+  std::stringstream containerStyle;
+  containerStyle << "top:" << p.y() << "px; left:" << p.x() << "px; "
+    << "display: flex;";
+
+  switch (horizontalAlign) {
+  case AlignmentFlag::Left: containerStyle << " justify-content: flex-start;"; break;
+  case AlignmentFlag::Right: containerStyle << " justify-content: flex-end;"; break;
+  case AlignmentFlag::Center: containerStyle << " justify-content: center;"; break;
+  default: break;
+  }
+
+  c->setAttributeValue("style", containerStyle.str());
+
+  // style inner text.
+
+  std::stringstream innerStyle;
+
+  switch (verticalAlign) {
+  case AlignmentFlag::Top: innerStyle << "align-self: flex-start;"; break;
+  case AlignmentFlag::Bottom: innerStyle << "align-self: flex-end;"; break;
+  case AlignmentFlag::Middle: innerStyle << " align-self: center;"; break;
+  default: break;
+  }
+
+  tw->setAttributeValue("style", innerStyle.str());
+
+  return c;
+}
+
+void WPieChart::drawLabel(WPainter* painter, const WRectF& rect,
+                         WFlags<AlignmentFlag> alignmentFlags,
+                         const WString& text, int row) const
+{
+  painter->drawText(rect, alignmentFlags, text);
 }
 
 WString WPieChart::labelText(int index, double v, double total, 
@@ -314,11 +372,11 @@ WString WPieChart::labelText(int index, double v, double total,
 {
   WString text;
 
-  if (options & TextLabel)
+  if (options.test(LabelOption::TextLabel))
     if (labelsColumn_ != -1)
-      text += asString(model()->data(index, labelsColumn_));
+      text += model()->displayData(index, labelsColumn_);
 
-  if (options & TextPercentage) {
+  if (options.test(LabelOption::TextPercentage)) {
     std::string label;
     double u = v / total * 100;
 
@@ -368,7 +426,7 @@ void WPieChart::drawPie(WPainter& painter, double cx, double cy,
     } else {
       if (shadow_) {
 	setShadow(painter);
-	painter.setBrush(WBrush(black));
+	painter.setBrush(WBrush(StandardColor::Black));
 	drawSlices(painter, cx, cy + h, r, total, true);
 	painter.setShadow(WShadow());
       }
@@ -393,7 +451,7 @@ void WPieChart::drawPie(WPainter& painter, double cx, double cy,
       for (int i = 0; i < model()->rowCount(); ++i) {
 	startAngles[i] = currentAngle;
 
-	double v = asNumber(model()->data(i, dataColumn_));
+	double v = model()->data(i, dataColumn_);
 	if (Utils::isNaN(v))
 	  continue;
 
@@ -421,7 +479,7 @@ void WPieChart::drawPie(WPainter& painter, double cx, double cy,
       for (int j = 0; j < model()->rowCount(); ++j) {
 	int i = (index90 + j) % model()->rowCount();
 
-	double v = asNumber(model()->data(i, dataColumn_));
+	double v = model()->data(i, dataColumn_);
 	if (Utils::isNaN(v))
 	  continue;
 
@@ -454,7 +512,7 @@ void WPieChart::drawPie(WPainter& painter, double cx, double cy,
       for (int j = model()->rowCount(); j > 0; --j) {
 	int i = (index90 + j) % model()->rowCount();
 
-	double v = asNumber(model()->data(i, dataColumn_));
+	double v = model()->data(i, dataColumn_);
 	if (Utils::isNaN(v))
 	  continue;
 
@@ -481,12 +539,12 @@ void WPieChart::drawPie(WPainter& painter, double cx, double cy,
       }
 
       /*
-       * Outside
+       * LabelOption::Outside
        */
       for (int j = 0; j < model()->rowCount(); ++j) {
 	int i = (index90 + j) % model()->rowCount();
 
-	double v = asNumber(model()->data(i, dataColumn_));
+	double v = model()->data(i, dataColumn_);
 	if (Utils::isNaN(v))
 	  continue;
 
@@ -533,7 +591,7 @@ void WPieChart::drawSlices(WPainter& painter,
   double currentAngle = startAngle_;
 
   for (int i = 0; i < model()->rowCount(); ++i) {
-    double v = asNumber(model()->data(i, dataColumn_));
+    double v = model()->data(i, dataColumn_);
     if (Utils::isNaN(v))
       continue;
 
@@ -557,13 +615,12 @@ void WPieChart::drawSlices(WPainter& painter,
      * See if we need to add an interactive area
      */
     if (!shadow) {
-      WModelIndex index = model()->index(i, dataColumn_);
-      
-      boost::any toolTip = index.data(ToolTipRole);
-      if (!toolTip.empty()) {
-	const int SEGMENT_ANGLE = 20;
+      WString toolTip = model()->toolTip(i, dataColumn_);
+      WLink *link = model()->link(i, dataColumn_);
+      if (!toolTip.empty() || link) {
+        const int SEGMENT_ANGLE = 20;
 
-	WPolygonArea *area = new WPolygonArea();
+	std::unique_ptr<WPolygonArea> area(new WPolygonArea());
 	WTransform t = painter.worldTransform();
 
 	area->addPoint(t.map(WPointF(pcx, pcy)));
@@ -584,9 +641,11 @@ void WPieChart::drawSlices(WPainter& painter,
 	area->addPoint(t.map(WPointF(pcx + r * std::cos(-a / 180.0 * M_PI),
 				     pcy + r * std::sin(-a / 180.0 * M_PI))));
 
-	area->setToolTip(asString(toolTip));
+        area->setToolTip(toolTip);
+        if (link)
+          area->setLink(*link);
 
-	addDataPointArea(index, area);
+	addDataPointArea(i, dataColumn_, std::move(area));
       }
     }
 
@@ -598,9 +657,10 @@ void WPieChart::drawSlices(WPainter& painter,
   }
 }
 
-void WPieChart::addDataPointArea(const WModelIndex& index, WAbstractArea *area) const
+void WPieChart::addDataPointArea(int row, int column,
+				 std::unique_ptr<WAbstractArea> area) const
 {
-  (const_cast<WPieChart *>(this))->addArea(area);
+  (const_cast<WPieChart *>(this))->addArea(std::move(area));
 }
 
 WBrush WPieChart::darken(const WBrush& brush)
@@ -608,10 +668,7 @@ WBrush WPieChart::darken(const WBrush& brush)
   WBrush result = brush;
   WColor c = result.color();
 
-  c.setRgb(c.red() * 3/4,
-	   c.green() * 3/4,
-	   c.blue() * 3/4,
-	   c.alpha());
+  c.setRgb(c.red() * 3/4, c.green() * 3/4, c.blue() * 3/4, c.alpha());
 
   result.setColor(c);
 
@@ -646,19 +703,21 @@ void WPieChart::drawOuter(WPainter& painter, double pcx, double pcy, double r,
 
 void WPieChart::paintEvent(WPaintDevice *paintDevice)
 {
-  while (!areas().empty())
-    delete areas().front();
+  const std::vector<WAbstractArea *> allAreas = areas();
+  for (auto area : allAreas) {
+    removeArea(area);
+  }
 
   WPainter painter(paintDevice);
-  painter.setRenderHint(WPainter::Antialiasing, true);
+  painter.setRenderHint(RenderHint::Antialiasing, true);
   paint(painter);
 }
 
 int WPieChart::nextIndex(int i) const
 {
   int r = model()->rowCount();
-  for (int n = (i + 1) % r; n != i; ++n) {
-    double v = asNumber(model()->data(n, dataColumn_));
+  for (int n = (i + 1) % r; n != i; n = (n + 1) % r) {
+    double v = model()->data(n, dataColumn_);
     if (!Utils::isNaN(v))
       return n;
   }
@@ -672,7 +731,7 @@ int WPieChart::prevIndex(int i) const
   for (int p = i - 1; p != i; --p) {
     if (p < 0)
       p += r;
-    double v = asNumber(model()->data(p, dataColumn_));
+    double v = model()->data(p, dataColumn_);
     if (!Utils::isNaN(v))
       return p;
   }
@@ -694,77 +753,6 @@ void WPieChart::modelChanged()
   pie_.insert(pie_.begin(), model()->rowCount(), PieData());
 
   update();
-}
-
-void WPieChart::modelColumnsInserted(const WModelIndex& parent,
-				     int start, int end)
-{
-  if (labelsColumn_ >= start)
-    labelsColumn_ += (end - start + 1);
-
-  if (dataColumn_ >= start)
-    dataColumn_ += (end - start + 1);
-}
-
-void WPieChart::modelColumnsRemoved(const WModelIndex& parent,
-				    int start, int end)
-{
-  bool needUpdate = false;
-
-  if (labelsColumn_ >= start) {
-    if (labelsColumn_ <= end) {
-      labelsColumn_ = -1;
-      needUpdate = true;
-    } else
-      labelsColumn_ -= (end - start + 1);
-  }
-
-  if (dataColumn_ >= start) {
-    if (dataColumn_ <= end) {
-      dataColumn_ = -1;
-      needUpdate = true;
-    } else
-      dataColumn_ -= (end - start + 1);
-  }
-
-  if (needUpdate)
-    update();
-}
-
-void WPieChart::modelRowsInserted(const WModelIndex& parent,
-				  int start, int end)
-{
-  for (int i = start; i <= end; ++i)
-    pie_.insert(pie_.begin() + i, PieData());
-
-  update();
-}
-
-void WPieChart::modelRowsRemoved(const WModelIndex& parent,
-				 int start, int end)
-{
-  for (int i = end; i >= start; --i)
-    pie_.erase(pie_.begin() + i);
-
-  update();
-}
-
-void WPieChart::modelDataChanged(const WModelIndex& topLeft,
-				 const WModelIndex& bottomRight)
-{
-  if ((labelsColumn_ >= topLeft.column() &&
-       labelsColumn_ <= bottomRight.column()) ||
-      (dataColumn_ >= topLeft.column() && 
-       dataColumn_ <= bottomRight.column()))
-    update();
-}
-
-void WPieChart::modelHeaderDataChanged(Orientation orientation,
-				       int start, int end)
-{
-  if ((labelsColumn_ >= start && labelsColumn_ <= end) ||
-      (dataColumn_ >= start && dataColumn_ <= end))
-    update();
 }
 
   }

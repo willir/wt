@@ -6,7 +6,8 @@
 
 #include "TopicWidget.h"
 
-#include <Wt/WText>
+#include <Wt/WString.h>
+#include <Wt/WText.h>
 
 #include <sstream>
 #include <boost/algorithm/string.hpp>
@@ -31,13 +32,11 @@ std::string skipSpaces(const std::string& line, unsigned int count) {
 }
 
 TopicWidget::TopicWidget()
-  : Wt::WContainerWidget()
+  : WContainerWidget()
 { }
 
 void TopicWidget::populateSubMenu(Wt::WMenu *menu)
-{
-  
-}
+{ }
 
 std::string TopicWidget::escape(const std::string &name) const
 {
@@ -57,13 +56,13 @@ std::string TopicWidget::docAnchor(const std::string &classname) const
   std::stringstream ss;
 
 #if !defined(WT_TARGET_JAVA)
-  ss << "<a href=\"http://www.webtoolkit.eu/wt/doc/reference/html/class"
+  ss << "<a href=\"https://www.webtoolkit.eu/wt/doc/reference/html/class"
      << escape("Wt::" + classname)
      << ".html\" target=\"_blank\">doc</a>";
 #else
   std::string cn = classname;
   cn = boost::replace_all(cn, "Chart::","chart/");
-  ss << "<a href=\"http://www.webtoolkit.eu/"
+  ss << "<a href=\"https://www.webtoolkit.eu/"
      << "jwt/latest/doc/javadoc/eu/webtoolkit/jwt/"
      << cn
      << ".html\" target=\"_blank\">doc</a>";
@@ -72,10 +71,9 @@ std::string TopicWidget::docAnchor(const std::string &classname) const
   return ss.str();
 }
 
-Wt::WText *TopicWidget::addText(const Wt::WString& s,
-				Wt::WContainerWidget *parent)
+Wt::WText *TopicWidget::addText(const Wt::WString& s, Wt::WContainerWidget *parent)
 {
-  Wt::WText *text = new Wt::WText(s, parent);
+  auto text = parent->addWidget(Wt::cpp14::make_unique<Wt::WText>(s));
   bool literal;
 #ifndef WT_TARGET_JAVA
   literal = s.literal();
@@ -117,5 +115,5 @@ Wt::WString TopicWidget::reindent(const Wt::WString& text)
       result += skipSpaces(line, indent);
     }
   }
-  return Wt::WString::fromUTF8(result);
+  return Wt::WString(result);
 }

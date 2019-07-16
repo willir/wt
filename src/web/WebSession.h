@@ -7,6 +7,7 @@
 #ifndef WEBSESSION_H_
 #define WEBSESSION_H_
 
+#include <mutex>
 #include <string>
 #include <vector>
 #include <deque>
@@ -16,21 +17,22 @@
 #endif
 
 #ifdef WT_BOOST_THREADS
-#include <boost/thread.hpp>
-#include <boost/thread/condition.hpp>
+#include <thread>
+#include <condition_variable>
 #endif
 
-#include <boost/shared_ptr.hpp>
-#include <boost/enable_shared_from_this.hpp>
+#ifdef WT_TARGET_JAVA
+#include <boost/thread.hpp>
+#endif // WT_TARGET_JAVA
 
 #include "TimeUtil.h"
 #include "WebRenderer.h"
 #include "WebRequest.h"
 #include "WebController.h"
 
-#include "Wt/WApplication"
-#include "Wt/WEnvironment"
-#include "Wt/WLogger"
+#include "Wt/WApplication.h"
+#include "Wt/WEnvironment.h"
+#include "Wt/WLogger.h"
 
 namespace Wt {
 
@@ -49,11 +51,11 @@ class WApplication;
  */
 class WT_API WebSession
 #ifndef WT_TARGET_JAVA
-  : public boost::enable_shared_from_this<WebSession>
+  : public std::enable_shared_from_this<WebSession>
 #endif
 {
 public:
-  enum State {
+  enum class State {
     JustCreated,
     ExpectLoad,
     Loaded,
@@ -62,7 +64,7 @@ public:
 
   WebSession(WebController *controller, const std::string& sessionId,
 	     EntryPointType type, const std::string& favicon,
-	     const WebRequest *request, WEnvironment *env = 0);
+	     const WebRequest *request, WEnvironment *env = nullptr);
   ~WebSession();
 
 #ifdef WT_TARGET_JAVA
@@ -78,12 +80,14 @@ public:
   std::string docType() const;
 
   std::string sessionId() const { return sessionId_; }
+  std::string multiSessionId() const { return multiSessionId_; }
+  void setMultiSessionId(const std::string &multiSessionId);
 
   WebController *controller() const { return controller_; }
   WEnvironment&  env() { return *env_; }
   WApplication  *app() { return app_; }
   WebRenderer&   renderer() { return renderer_; }
-  bool useUrlRewriting() { return useUrlRewriting_; }
+  bool useUrlRewriting();
 
   bool debug() const { return debug_; }
 
@@ -115,10 +119,9 @@ public:
 
 #ifndef WT_TARGET_JAVA
   const Time& expireTime() const { return expire_; }
-  bool shouldDisconnect() const;
 #endif // WT_TARGET_JAVA
 
-  bool dead() { return state_ == Dead; }
+  bool dead() { return state_ == State::Dead; }
   State state() const { return state_; }
   void kill();
 
@@ -129,8 +132,7 @@ public:
    */
 
   const std::string& applicationName() const { return applicationName_; }
-  const std::string applicationUrl() const
-    { return applicationUrl_ + sessionQuery(); }
+  const std::string applicationUrl() const { return applicationUrl_; }
   const std::string& deploymentPath() const { return deploymentPath_; }
 
   bool hasSessionIdInUrl() const { return sessionIdInUrl_; }
@@ -151,7 +153,7 @@ public:
 
   std::string ajaxCanonicalUrl(const WebResponse& request) const;
 
-  enum BootstrapOption {
+  enum class BootstrapOption {
     ClearInternalPath,
     KeepInternalPath
   };
@@ -176,16 +178,16 @@ public:
 
   class WT_API Handler {
   public:
-    enum LockOption {
+    enum class LockOption {
       NoLock,
       TryLock,
       TakeLock
     };
 
     Handler();
-    Handler(boost::shared_ptr<WebSession> session,
+    Handler(const std::shared_ptr<WebSession>& session,
 	    WebRequest& request, WebResponse& response);
-    Handler(boost::shared_ptr<WebSession> session, LockOption lockOption);
+    Handler(const std::shared_ptr<WebSession>& session, LockOption lockOption);
     Handler(WebSession *session);
     ~Handler();
 
@@ -208,22 +210,23 @@ public:
     std::vector<unsigned int> signalOrder;
 
 #ifdef WT_THREADED
-    boost::thread::id lockOwner() const { return lockOwner_; }
-    boost::mutex::scoped_lock& lock() { return lock_; }
+    std::thread::id lockOwner() const { return lockOwner_; }
+    std::unique_lock<std::mutex>& lock() { return lock_; }
 #endif
 
-    static void attachThreadToSession(boost::shared_ptr<WebSession> session);
+    static void attachThreadToSession
+      (const std::shared_ptr<WebSession>& session);
     static Handler *attachThreadToHandler(Handler *handler);
 
   private:
     void init();
 
 #ifndef WT_TARGET_JAVA
-    boost::shared_ptr<WebSession> sessionPtr_;
+    std::shared_ptr<WebSession> sessionPtr_;
 #endif
 #ifdef WT_THREADED
-    boost::mutex::scoped_lock lock_;
-    boost::thread::id lockOwner_;
+    std::unique_lock<std::mutex> lock_;
+    std::thread::id lockOwner_;
 
     Handler(const Handler&);
 #endif // WT_THREADED
@@ -245,7 +248,10 @@ public:
   void handleRequest(Handler& handler);
 
 #ifdef WT_BOOST_THREADS
-  boost::mutex& mutex() { return mutex_; }
+  std::mutex& mutex() { return mutex_; }
+#ifdef WT_TARGET_JAVA
+  static boost::thread_specific_ptr<Handler> threadHandler_;
+#endif // WT_TARGET_JAVA
 #endif
 
   void setExpectLoad();
@@ -254,24 +260,32 @@ public:
   void generateNewSessionId();
   void queueEvent(const ApplicationEvent& event);
 
+#ifdef WT_TARGET_JAVA
+  void handleWebSocketMessage(Handler& handler);
+#endif
+
+#ifndef WT_TARGET_JAVA
+  // For use in WTestEnvironment
+  void setDocRoot(const std::string &docRoot);
+#endif
+
 private:
+#ifndef WT_TARGET_JAVA
   void handleWebSocketRequest(Handler& handler);
-  static void handleWebSocketMessage(boost::weak_ptr<WebSession> session,
+  static void handleWebSocketMessage(std::weak_ptr<WebSession> session,
 				     WebReadEvent event);
-  static void webSocketConnect(boost::weak_ptr<WebSession> session,
+  static void webSocketConnect(std::weak_ptr<WebSession> session,
 			       WebWriteEvent event);
-  static void webSocketReady(boost::weak_ptr<WebSession> session,
+  static void webSocketReady(std::weak_ptr<WebSession> session,
 			     WebWriteEvent event);
+#endif
 
   void checkTimers();
   void hibernate();
 
 #ifdef WT_BOOST_THREADS
-  boost::mutex mutex_;
-  boost::mutex eventQueueMutex_;
-  static boost::thread_specific_ptr<Handler> threadHandler_;
-#else
-  static Handler *threadHandler_;
+  std::mutex mutex_;
+  std::mutex eventQueueMutex_;
 #endif
 
   std::deque<ApplicationEvent> eventQueue_;
@@ -280,8 +294,7 @@ private:
   std::string favicon_;
   State state_;
 
-  bool useUrlRewriting_;
-  std::string sessionId_, sessionIdCookie_;
+  std::string sessionId_, sessionIdCookie_, multiSessionId_;
   bool sessionIdChanged_, sessionIdCookieChanged_, sessionIdInUrl_;
 
   WebController *controller_;
@@ -306,23 +319,22 @@ private:
 #endif
 
 #ifdef WT_BOOST_THREADS
-  boost::condition recursiveEvent_, recursiveEventDone_;
+  std::condition_variable recursiveEvent_, recursiveEventDone_;
 #endif
   WEvent::Impl *newRecursiveEvent_;
 
   /* For synchronous handling */
 #ifdef WT_BOOST_THREADS
-  boost::condition updatesPendingEvent_;
+  std::condition_variable updatesPendingEvent_;
 #endif
-  bool             updatesPending_, triggerUpdate_;
+  bool updatesPending_, triggerUpdate_;
 
-  WEnvironment  embeddedEnv_;
+  WEnvironment embeddedEnv_;
   WEnvironment *env_;
   WApplication *app_;
-  bool          debug_;
+  bool debug_;
 
   std::vector<Handler *> handlers_;
-  std::vector<WObject *> emitStack_;
 
   Handler *recursiveEventHandler_;
 
@@ -341,10 +353,14 @@ private:
   void serveError(int status, Handler& handler, const std::string& exception);
   void serveResponse(Handler& handler);
 
-  enum SignalKind { LearnedStateless = 0, AutoLearnStateless = 1,
-		    Dynamic = 2 };
+  enum class SignalKind { LearnedStateless = 0,
+                          StubbedStateless = 1, // Edge case: slots that belong to a previously stubbed widget,
+                                                // but the widget was unstubbed after the signal was emitted
+                          AutoLearnStateless = 2,
+                          Dynamic = 3 };
   void processSignal(EventSignalBase *s, const std::string& se,
-		     const WebRequest& request, SignalKind kind);
+                     const WebRequest& request, SignalKind kind,
+                     bool checkWasStubbed);
 
   std::vector<unsigned int> getSignalProcessingOrder(const WEvent& e) const;
   void notifySignal(const WEvent& e);
@@ -365,6 +381,7 @@ private:
 
   friend class WebSocketMessage;
   friend class WebRenderer;
+  friend class WebSocketSupport;
 };
 
 struct WEvent::Impl {
@@ -375,13 +392,13 @@ struct WEvent::Impl {
 
   Impl(WebSession::Handler *aHandler, bool doRenderOnly = false)
     : handler(aHandler),
-      response(0),
+      response(nullptr),
       renderOnly(doRenderOnly)
   { }
 
   Impl(WebSession::Handler *aHandler, const Function& aFunction)
     : handler(aHandler),
-      response(0),
+      response(nullptr),
       function(aFunction),
       renderOnly(false)
   { }
@@ -394,14 +411,14 @@ struct WEvent::Impl {
   { }
 
   Impl(WebResponse *aResponse)
-    : handler(0),
+    : handler(nullptr),
       response(aResponse),
       renderOnly(true)
   { }
 
   Impl()
-    : handler(0),
-      response(0)
+    : handler(nullptr),
+      response(nullptr)
   { }
 };
 

@@ -1,34 +1,49 @@
-#include <Wt/WBreak>
-#include <Wt/WComboBox>
-#include <Wt/WContainerWidget>
-#include <Wt/WLineEdit>
-#include <Wt/WTextArea>
+#include <Wt/WBreak.h>
+#include <Wt/WComboBox.h>
+#include <Wt/WContainerWidget.h>
+#include <Wt/WLineEdit.h>
+#include <Wt/WTextArea.h>
+
+#ifdef WT_TARGET_JAVA
+using namespace Wt;
+#endif // WT_TARGET_JAVA
 
 SAMPLE_BEGIN(SizingRelative)
-Wt::WContainerWidget *container = new Wt::WContainerWidget();
+auto container = cpp14::make_unique<WContainerWidget>();
 
-Wt::WLineEdit *edit = new Wt::WLineEdit(container);
-edit->setEmptyText(".input-mini");
+WLineEdit *edit =
+    container->addWidget(cpp14::make_unique<WLineEdit>());
+edit->setPlaceholderText(".input-mini");
 edit->setStyleClass("input-mini");
-new Wt::WBreak(container);
-edit = new Wt::WLineEdit(container);
-edit->setEmptyText(".input-small");
+container->addWidget(cpp14::make_unique<WBreak>());
+
+edit =
+    container->addWidget(cpp14::make_unique<WLineEdit>());
+edit->setPlaceholderText(".input-small");
 edit->setStyleClass("input-small");
-new Wt::WBreak(container);
-edit = new Wt::WLineEdit(container);
-edit->setEmptyText(".input-medium");
+container->addWidget(cpp14::make_unique<WBreak>());
+
+edit =
+    container->addWidget(cpp14::make_unique<WLineEdit>());
+edit->setPlaceholderText(".input-medium");
 edit->setStyleClass("input-medium");
-new Wt::WBreak(container);
-edit = new Wt::WLineEdit(container);
-edit->setEmptyText(".input-large");
+container->addWidget(cpp14::make_unique<WBreak>());
+
+edit =
+    container->addWidget(cpp14::make_unique<WLineEdit>());
+edit->setPlaceholderText(".input-large");
 edit->setStyleClass("input-large");
-new Wt::WBreak(container);
-edit = new Wt::WLineEdit(container);
-edit->setEmptyText(".input-xlarge");
+container->addWidget(cpp14::make_unique<WBreak>());
+
+edit =
+    container->addWidget(cpp14::make_unique<WLineEdit>());
+edit->setPlaceholderText(".input-xlarge");
 edit->setStyleClass("input-xlarge");
-new Wt::WBreak(container);
-edit = new Wt::WLineEdit(container);
-edit->setEmptyText(".input-xxlarge");
+container->addWidget(cpp14::make_unique<WBreak>());
+
+edit =
+    container->addWidget(cpp14::make_unique<WLineEdit>());
+edit->setPlaceholderText(".input-xxlarge");
 edit->setStyleClass("input-xxlarge");
 
 SAMPLE_END(return container)
