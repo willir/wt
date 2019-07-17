@@ -1160,6 +1160,15 @@ struct DecrementDbo {
     dbo->decRef();
   }
 };
+struct DirtyObjRemover {
+  Impl::MetaDboBaseSet::iterator mI;
+  explicit DirtyObjRemover(Impl::MetaDboBaseSet::iterator i) : mI(std::move(i)) {}
+  void operator()(Impl::MetaDboBaseSet *s) const {
+    if (s != nullptr) {
+      s->erase(mI);
+    }
+  }
+};
 }  // anonymous namespace
 
 void Session::flush()
@@ -1169,11 +1178,13 @@ void Session::flush()
   while (!dirtyObjects_->empty()) {
     Impl::MetaDboBaseSet::iterator i = dirtyObjects_->begin();
     MetaDboBase *dbo = *i;
-    dirtyObjects_->erase(i);
-    std::unique_ptr<MetaDboBase, DecrementDbo> deleter(dbo);  // For the case of exception
-    dbo->flush();
 
-    handleObjectsToAdd();
+    // For the case of exception:
+    std::unique_ptr<MetaDboBase, DecrementDbo> deleter(dbo);
+    std::unique_ptr<Impl::MetaDboBaseSet, DirtyObjRemover> obj_remover(
+        dirtyObjects_, DirtyObjRemover{i});
+
+    dbo->flush();
   }
 }
 

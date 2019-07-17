@@ -152,8 +152,6 @@ private:
 
     Impl(Session& session_);
     ~Impl();
-  private:
-    void removeAllDirtyObjects();
   };
 
   bool committed_;

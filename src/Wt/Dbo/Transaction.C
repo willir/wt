@@ -184,24 +184,10 @@ void Transaction::Impl::rollback()
 
   objects_.clear();
 
-  removeAllDirtyObjects();  // TODO: Add option to reread all
 
   session_.returnConnection(std::move(connection_));
   session_.transaction_ = nullptr;
   active_ = false;
-}
-
-void Transaction::Impl::removeAllDirtyObjects() {
-#if 0
-  session_.objectsToAdd_.clear();
-
-  while (!session_.dirtyObjects_->empty()) {
-    Session::MetaDboBaseSet::iterator i = session_.dirtyObjects_->begin();
-    MetaDboBase *dbo = *i;
-    session_.dirtyObjects_->erase(i);
-    dbo->decRef();
-  }
-#endif
 }
 
   }

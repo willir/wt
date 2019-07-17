@@ -9,8 +9,6 @@
 #include "Wt/Dbo/Exception.h"
 #include "SqlConnection.h"
 
-#include <iostream>
-
 #include <cassert>
 #include <iostream>
 
