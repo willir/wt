@@ -92,39 +92,39 @@ namespace Wt {
     // On Post Insert:
     template<typename C>
     typename boost::enable_if<has_member_onPostInsert<C>, void>::type
-    callOnPostInsert(C *dboRow, Session &session, const ptr<C> &dboPtr) {
-      dboRow->onPostInsert(session, dboPtr);
+    callOnPostInsert(C *dboRow, const ptr<C> &dboPtr) {
+      dboRow->onPostInsert(dboPtr);
     }
 
     template<typename C>
     typename boost::disable_if<has_member_onPostInsert<C>, void>::type
-    callOnPostInsert(C *dboRow, Session &session, const ptr<C> &dboPtr) {
+    callOnPostInsert(C *dboRow, const ptr<C> &dboPtr) {
       //Do nothing
     }
 
     // On Post Update:
     template<typename C>
     typename boost::enable_if<has_member_onPostUpdate<C>, void>::type
-    callOnPostUpdate(C *dboRow, Session &session, const ptr<C> &dboPtr) {
-      dboRow->onPostUpdate(session, dboPtr);
+    callOnPostUpdate(C *dboRow, const ptr<C> &dboPtr) {
+      dboRow->onPostUpdate(dboPtr);
     }
 
     template<typename C>
     typename boost::disable_if<has_member_onPostUpdate<C>, void>::type
-    callOnPostUpdate(C *dboRow, Session &session, const ptr<C> &dboPtr) {
+    callOnPostUpdate(C *dboRow, const ptr<C> &dboPtr) {
       //Do nothing
     }
 
     // On Post Delete:
     template<typename C>
     typename boost::enable_if<has_member_onPostDelete<C>, void>::type
-    callOnPostDelete(C *dboRow, Session &session, const ptr<C> &dboPtr) {
-      dboRow->onPostDelete(session, dboPtr);
+    callOnPostDelete(C *dboRow, const ptr<C> &dboPtr) {
+      dboRow->onPostDelete(dboPtr);
     }
 
     template<typename C>
     typename boost::disable_if<has_member_onPostDelete<C>, void>::type
-    callOnPostDelete(C *dboRow, Session &session, const ptr<C> &dboPtr) {
+    callOnPostDelete(C *dboRow, const ptr<C> &dboPtr) {
       //Do nothing
     }
 
@@ -452,9 +452,9 @@ void Session::implSave(MetaDbo<C>& dbo)
 
   if (isInsert) {
     dbo.setInsertedInTransaction();
-    Impl::callOnPostInsert(dbo.obj(), *this, dbRow);
+    Impl::callOnPostInsert(dbo.obj(), dbRow);
   } else {
-    Impl::callOnPostUpdate(dbo.obj(), *this, dbRow);
+    Impl::callOnPostUpdate(dbo.obj(), dbRow);
   }
 
   mapping->registry_[dbo.id()] = &dbo;
@@ -500,7 +500,7 @@ void Session::implDelete(MetaDbo<C>& dbo)
                                  this->tableName<C>(), version);
   }
 
-  Impl::callOnPostDelete(dbo.obj(), *this, dbRow);
+  Impl::callOnPostDelete(dbo.obj(), dbRow);
 }
 
 template<class C>
