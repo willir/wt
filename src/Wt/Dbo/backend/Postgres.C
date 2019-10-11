@@ -194,7 +194,8 @@ class PostgresStatement final : public SqlStatement
 public:
   PostgresStatement(Postgres& conn, const std::string& sql)
     : conn_(conn),
-      sql_(sql)
+      sql_(sql),
+      orig_sql_(sql)
   {
     convertToNumberedPlaceholders();
 
@@ -679,7 +680,7 @@ public:
   }
 
   virtual std::string sql() const override {
-    return sql_;
+    return orig_sql_;
   }
 
 private:
@@ -692,6 +693,7 @@ private:
 
   Postgres& conn_;
   std::string sql_;
+  std::string orig_sql_;
   char name_[64];
   PGresult *result_;
   enum { NoFirstRow, FirstRow, NextRow, Done } state_;
@@ -705,7 +707,9 @@ private:
 
   void setValue(int column, const std::string& value) {
     if (column >= paramCount_)
-      throw NonRetriableException("Binding too much parameters");
+      throw NonRetriableException(
+              "Binding too many parameters. column: " +
+              std::to_string(column) + ", paramCount: " + std::to_string(paramCount_));
 
     for (int i = (int)params_.size(); i <= column; ++i)
       params_.push_back(Param());
@@ -716,7 +720,8 @@ private:
 
   void convertToNumberedPlaceholders()
   {
-    std::stringstream result;
+    std::string result;
+    result.reserve(sql_.length());
 
     enum { Statement, SQuote, DQuote } state = Statement;
     int placeholder = 1;
@@ -729,7 +734,8 @@ private:
 	else if (sql_[i] == '"')
 	  state = DQuote;
 	else if (sql_[i] == '?') {
-	  result << '$' << placeholder++;
+	  result += '$';
+	  result += std::to_string(placeholder++);
 	  continue;
 	}
 	break;
@@ -738,7 +744,7 @@ private:
 	  if (i + 1 == sql_.length())
 	    state = Statement;
 	  else if (sql_[i + 1] == '\'') {
-	    result << sql_[i];
+	    result += sql_[i];
 	    ++i; // skip to next
 	  } else
 	    state = Statement;
@@ -749,11 +755,11 @@ private:
 	  state = Statement;
 	break;
       }
-      result << sql_[i];
+      result += sql_[i];
     }
 
     paramCount_ = placeholder - 1;
-    sql_ = result.str();
+    sql_ = std::move(result);
   }
 };
 
