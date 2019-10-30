@@ -151,6 +151,15 @@ protected:
   void checkNotOrphaned();
 };
 
+class SetTransactionStateOnExit {
+public:
+  SetTransactionStateOnExit(MetaDboBase *dbo, MetaDboBase::State state) noexcept;
+  ~SetTransactionStateOnExit();
+private:
+  MetaDboBase *dbo_;
+  MetaDboBase::State state_;
+};
+
 /*! \class dbo_default_traits Wt/Dbo/Dbo Wt/Dbo/Dbo
  *  \brief Default traits for a class mapped with %Wt::%Dbo.
  * 

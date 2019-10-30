@@ -90,6 +90,14 @@ void MetaDboBase::checkNotOrphaned()
   }
 }
 
+SetTransactionStateOnExit::SetTransactionStateOnExit(MetaDboBase *dbo,
+                                                     MetaDboBase::State state) noexcept
+  : dbo_(dbo), state_(state) {}
+
+SetTransactionStateOnExit::~SetTransactionStateOnExit() {
+  dbo_->setTransactionState(state_);
+}
+
 ptr_base::~ptr_base()
 { }
 

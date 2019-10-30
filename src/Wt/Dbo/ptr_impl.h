@@ -68,24 +68,16 @@ void MetaDbo<C>::flush()
   if (state_ & NeedsDelete) {
     state_ &= ~NeedsDelete;
 
-    try {
-      session()->implDelete(*this);
-      setTransactionState(DeletedInTransaction);
-    } catch (...) {
-      setTransactionState(DeletedInTransaction);
-      throw;
-    }
+    SetTransactionStateOnExit onExit(this, DeletedInTransaction);
+    session()->implDelete(*this);
+
   } else if (state_ & NeedsSave) {
     state_ &= ~NeedsSave;
     state_ |= Saving;
 
-    try {
-      session()->implSave(*this);
-      setTransactionState(SavedInTransaction);
-    } catch (...) {
-      setTransactionState(SavedInTransaction);
-      throw;
-    }
+    SetTransactionStateOnExit onExit(this, SavedInTransaction);
+    session()->implSave(*this);
+
   } else if (state_ & Saving) {
     /*
      * This must be because of a circular relational dependency:
