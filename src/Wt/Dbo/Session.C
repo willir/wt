@@ -176,6 +176,19 @@ void Session::setConnectionPool(SqlConnectionPool &pool)
   connectionPool_ = &pool;
 }
 
+const char *Session::tableName(const std::type_info &typeinfo) const {
+    ClassRegistry::const_iterator i = classRegistry_.find(&typeinfo);
+    if (i != classRegistry_.end())
+        return i->second->tableName;
+    else
+        throw Exception(std::string("Class ") + typeinfo.name()
+                                + " was not mapped.");
+}
+
+std::string Session::tableNameQuoted(const std::type_info &typeinfo) const {
+    return std::string("\"") + Impl::quoteSchemaDot(tableName(typeinfo)) + '"';
+}
+
 SqlConnection *Session::connection(bool openTransaction)
 {
   if (!transaction_)

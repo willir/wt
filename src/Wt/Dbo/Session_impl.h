@@ -210,19 +210,14 @@ template <class C>
 const char *Session::tableName() const
 {
   typedef typename std::remove_const<C>::type MutC;
-
-  ClassRegistry::const_iterator i = classRegistry_.find(&typeid(MutC));
-  if (i != classRegistry_.end())
-    return dynamic_cast< Mapping<MutC> *>(i->second)->tableName;
-  else
-    throw Exception(std::string("Class ") + typeid(MutC).name()
-		    + " was not mapped.");
+  return tableName(typeid(MutC));
 }
 
 template <class C>
-const std::string Session::tableNameQuoted() const
+std::string Session::tableNameQuoted() const
 {
-  return std::string("\"") + Impl::quoteSchemaDot(tableName<C>()) + '"';
+  typedef typename std::remove_const<C>::type MutC;
+  return tableNameQuoted(typeid(MutC));
 }
 
 template <class C>
